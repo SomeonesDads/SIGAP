@@ -77,7 +77,6 @@ out/
 
 # --- Machine Learning Weights & Models ---
 weights/
-*.pt
 *.pth
 *.onnx
 *.ckpt
