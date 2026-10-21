@@ -14,11 +14,11 @@ interface ChatInputProps {
 export function ChatInput({
   onSend,
   isLoading = false,
-  placeholder = "Mulai investigasi karhutla (contoh: Analisis Pulang Pisau 7 hari terakhir)...",
+  placeholder = "Instruksikan agen (misal: Analisis Pulang Pisau)...",
   suggestedPrompts = [
-    "Analisis potensi karhutla di Pulang Pisau 7 hari terakhir",
-    "Tampilkan area gambut dengan klaster hotspot aktif",
-    "Hitung dNBR dan prioritaskan wilayah dekat permukiman",
+    "Analisis Pulang Pisau 7 hari terakhir",
+    "Area gambut klaster aktif",
+    "Prioritas dekat permukiman",
   ],
 }: ChatInputProps) {
   const [input, setInput] = useState("");
@@ -38,12 +38,12 @@ export function ChatInput({
   };
 
   return (
-    <div className="w-full space-y-2.5">
+    <div className="w-full space-y-1.5">
       {/* Quick Prompts Suggestions */}
       {suggestedPrompts.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 px-1">
-          <span className="text-[11px] font-medium text-slate-500 flex items-center gap-1 mr-1">
-            <Sparkles className="h-3 w-3 text-amber-700" />
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+          <span className="text-[10px] font-medium text-slate-500 flex items-center gap-0.5 shrink-0">
+            <Sparkles className="h-2.5 w-2.5 text-amber-700" />
             Saran:
           </span>
           {suggestedPrompts.map((prompt, idx) => (
@@ -53,7 +53,7 @@ export function ChatInput({
               onClick={() => {
                 setInput(prompt);
               }}
-              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-amber-700"
+              className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] text-slate-700 transition-colors hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-800"
             >
               {prompt}
             </button>
@@ -64,7 +64,7 @@ export function ChatInput({
       {/* Input Bar */}
       <form
         onSubmit={handleSubmit}
-        className="relative flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg backdrop-blur-sm focus-within:border-amber-500/60 focus-within:ring-1 focus-within:ring-amber-500/50"
+        className="relative flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white p-1 shadow-xs focus-within:border-amber-500 focus-within:ring-1 focus-within:ring-amber-500/40"
       >
         <input
           type="text"
@@ -73,7 +73,7 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={isLoading}
-          className="flex-1 bg-transparent px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:outline-none disabled:opacity-50"
+          className="flex-1 min-w-0 bg-transparent px-2 py-1 text-xs text-slate-900 placeholder-slate-400 focus:outline-none disabled:opacity-50"
         />
 
         <Button
@@ -81,14 +81,14 @@ export function ChatInput({
           variant="primary"
           size="sm"
           disabled={!input.trim() || isLoading}
-          className="h-9 px-4 shrink-0 rounded-lg"
+          className="h-7 px-2.5 text-xs shrink-0 rounded-md gap-1"
         >
           {isLoading ? (
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
+            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />
           ) : (
             <>
               <span>Kirim</span>
-              <SendHorizontal className="h-3.5 w-3.5" />
+              <SendHorizontal className="h-3 w-3" />
             </>
           )}
         </Button>
