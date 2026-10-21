@@ -22,6 +22,26 @@ from google.adk.tools import agent_tool
 from google.adk.tools.google_search_tool import GoogleSearchTool
 from google.adk.tools import url_context
 
+# Custom ADK Domain Tool Wrappers
+from agent.tools.firms_tool import fetch_hotspots
+from agent.tools.earth_engine_tool import fetch_satellite_imagery, assess_image_quality
+from agent.tools.unet_tool import segment_burned_area
+from agent.tools.geospatial_tool import (
+    compute_dnbr,
+    compute_burned_area,
+    overlay_risk_layers,
+)
+from agent.tools.priority_tool import (
+    score_hotspot_priority,
+    rank_all_active_hotspots,
+    explain_priority,
+)
+from agent.tools.dispatch_tool import (
+    optimize_team_assignments,
+    estimate_travel_time,
+    find_nearest_water_sources,
+)
+
 
 class GlobalGemini(Gemini):
   """Pins the Vertex AI client to the `global` location.
@@ -82,6 +102,9 @@ perception_fusion = LlmAgent(
   sub_agents=[],
   instruction='You are the Perception and Fusion Agent. Resolve conflicting sensor data and multi-satellite reports (such as FIRMS, Sipongi, BMKG, and field reports). Assess the true confidence level and likelihood of actual fire for each detected hotspot instead of just displaying raw coordinates.',
   tools=[
+    fetch_hotspots,
+    fetch_satellite_imagery,
+    assess_image_quality,
     agent_tool.AgentTool(agent=perception___fusion_agent_google_search_agent),
     agent_tool.AgentTool(agent=perception___fusion_agent_url_context_agent)
   ],
@@ -99,7 +122,12 @@ risk_scoring = LlmAgent(
   ),
   sub_agents=[],
   instruction='You are the Risk Scoring Agent. Calculate dynamic priority scores for detected fire clusters using situational reasoning. Evaluate critical factors including land type (peatland vs. mineral), distance to settlements, wind direction, cluster expansion rates, and historical fire recurrence. Adapt factor weights dynamically according to seasonal severity and local context.',
-  tools=[],
+  tools=[
+    score_hotspot_priority,
+    rank_all_active_hotspots,
+    explain_priority,
+    overlay_risk_layers,
+  ],
 )
 
 # ---------------------------------------------------------------------------
@@ -114,7 +142,11 @@ verification_agent = LlmAgent(
   ),
   sub_agents=[],
   instruction='You are the Verification Agent. Determine whether a potential hotspot requires preliminary verification (e.g., drone surveillance, high-resolution satellite imagery, or local community confirmation) prior to dispatching ground crews. Weigh the resource cost of false-positive deployments against the danger of delayed intervention.',
-  tools=[],
+  tools=[
+    segment_burned_area,
+    compute_dnbr,
+    compute_burned_area,
+  ],
 )
 
 # ---------------------------------------------------------------------------
@@ -142,6 +174,9 @@ routing_dispatch = LlmAgent(
   sub_agents=[],
   instruction='You are the Routing and Dispatch Agent. Solve global multi-resource allocation problems by matching available firefighting teams to priority hotspots. Minimize total estimated loss (burned area and community risk) by evaluating actual road accessibility, terrain friction, and proximity to water sources rather than simple straight-line distances.',
   tools=[
+    optimize_team_assignments,
+    estimate_travel_time,
+    find_nearest_water_sources,
     agent_tool.AgentTool(agent=routing___dispatch_agent_google_search_agent)
   ],
 )
@@ -158,7 +193,10 @@ coordination_agent = LlmAgent(
   ),
   sub_agents=[],
   instruction='You are the Coordination Agent. Draft operational messages and updates for field personnel. Track operational progress, update ETAs when obstacles arise, and flag critical situations (such as urgent civilian evacuations) for immediate human supervisor escalation.',
-  tools=[],
+  tools=[
+    estimate_travel_time,
+    explain_priority,
+  ],
 )
 
 # ---------------------------------------------------------------------------
@@ -173,7 +211,10 @@ feedback_learning = LlmAgent(
   ),
   sub_agents=[],
   instruction='You are the Feedback and Learning Agent. Review post-incident data to compare initial confidence assessments and risk scores against actual field outcomes. Recommend adjustments to scoring weights and dispatch logic to continuously enhance system decision accuracy.',
-  tools=[],
+  tools=[
+    score_hotspot_priority,
+    compute_burned_area,
+  ],
 )
 
 # ---------------------------------------------------------------------------

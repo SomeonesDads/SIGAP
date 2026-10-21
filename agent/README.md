@@ -12,23 +12,23 @@ The system consists of **1 root orchestrator** and **6 specialized domain sub-ag
 Wildfire Response Orchestrator (root_agent)
 ├── 1. Perception & Fusion Agent (perception_fusion)
 │   ├── Data fusion from FIRMS, Sipongi+, and BMKG feeds
-│   └── Tools: GoogleSearchTool, UrlContextTool, firms_tool
+│   └── Tools: fetch_hotspots, fetch_satellite_imagery, assess_image_quality, GoogleSearchTool, UrlContextTool
 ├── 2. Risk Scoring Agent (risk_scoring)
 │   ├── Dynamic multi-factor risk scoring (peat depth, settlements, wind, recurrence)
-│   └── Tools: priority_tool, geospatial_tool
+│   └── Tools: score_hotspot_priority, rank_all_active_hotspots, explain_priority, overlay_risk_layers
 ├── 3. Verification Agent (verification_agent)
 │   ├── Pre-dispatch decision-making (drone, satellite, community spot-check)
-│   └── Weighs false-alarm costs against peatland smoldering risks
+│   └── Tools: segment_burned_area, compute_dnbr, compute_burned_area
 ├── 4. Routing & Dispatch Agent (routing_dispatch)
 │   ├── Multi-resource optimal assignment (Manggala Agni, BPBD, MPA)
 │   ├── Evaluates real road/canal friction and water source proximity
-│   └── Tools: GoogleSearchTool, dispatch_tool
+│   └── Tools: optimize_team_assignments, estimate_travel_time, find_nearest_water_sources, GoogleSearchTool
 ├── 5. Coordination Agent (coordination_agent)
 │   ├── Field communications, radio briefs, and SITREP generation
-│   └── Escalation triggers (civilian evacuations, hazardous PM2.5 / ISPU)
+│   └── Tools: estimate_travel_time, explain_priority
 └── 6. Feedback & Learning Agent (feedback_learning)
     ├── Post-incident evaluations (After-Action Review)
-    └── Algorithm calibration and weight adjustments
+    └── Tools: score_hotspot_priority, compute_burned_area
 ```
 
 ---
