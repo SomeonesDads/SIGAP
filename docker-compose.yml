@@ -18,12 +18,12 @@ services:
     restart: unless-stopped
 
   # ----------------------------------------------------------------------------
-  # FastAPI Backend (LangGraph Agent & ML Inference)
+  # FastAPI Backend (Google ADK Multi-Agent & ML Inference)
   # ----------------------------------------------------------------------------
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: sigap_backend
     ports:
       - "8000:8000"
@@ -31,10 +31,13 @@ services:
       - .env
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - PYTHONPATH=/app
     volumes:
-      - ./backend:/app
-      - ./weights:/app/weights
+      - ./backend:/app/backend
+      - ./agent:/app/agent
       - ./data:/app/data
+      - ./ml:/app/ml
+      - ./weights:/app/weights
     depends_on:
       redis:
         condition: service_healthy
