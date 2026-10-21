@@ -12,10 +12,58 @@ export interface MonitoringHotspotsResponse {
   hotspots: Hotspot[];
 }
 
-/** Guess the target region from a free-text prompt for the offline fallback. */
-function guessRegion(query: string): string {
-  const known = ["Pulang Pisau", "Ketapang", "Ogan Komering Ilir", "Sebangau", "Kapuas", "Riau", "Barito Utara"];
-  return known.find((r) => query.toLowerCase().includes(r.toLowerCase())) ?? "Kalimantan Tengah";
+/** Extract the target Indonesian city, regency, or province from a free-text prompt. */
+export function guessRegion(query: string): string {
+  const qClean = (query || "").trim();
+  if (!qClean) return "Indonesia";
+  const qLower = qClean.toLowerCase();
+
+  const knownRegions = [
+    "Medan Kota", "Kota Medan", "Medan", "Deli Serdang", "Binjai", "Sumatera Utara", "Sumut",
+    "Banda Aceh", "Aceh", "Padang", "Sumatera Barat", "Sumbar",
+    "Pekanbaru", "Bengkalis", "Dumai", "Riau",
+    "Muaro Jambi", "Kumpeh", "Jambi",
+    "Ogan Komering Ilir", "Tulung Selapan", "Palembang", "Sumatera Selatan", "Sumsel", "Lampung",
+    "Pulang Pisau", "Sebangau", "Seruyan", "Kotawaringin", "Kapuas", "Barito Utara", "Palangkaraya", "Palangka Raya", "Kalimantan Tengah", "Kalteng",
+    "Ketapang", "Kendawangan", "Pontianak", "Kalimantan Barat", "Kalbar",
+    "Paser", "Long Ikis", "Samarinda", "Balikpapan", "Kalimantan Timur", "Kaltim",
+    "Banjarmasin", "Kalimantan Selatan", "Kalsel", "Kalimantan",
+    "Jakarta", "Bandung", "Jawa Barat", "Semarang", "Jawa Tengah",
+    "Pasuruan", "Arjuno", "Malang", "Surabaya", "Jawa Timur", "Jawa",
+    "Bali", "Nusa Tenggara Barat", "NTB", "Timor Tengah Selatan", "Kupang", "Nusa Tenggara Timur", "NTT",
+    "Morowali Utara", "Morowali", "Sulawesi Tengah", "Makassar", "Sulawesi Selatan", "Sulawesi",
+    "Maluku", "Merauke", "Papua Selatan", "Papua",
+  ];
+
+  for (const name of knownRegions) {
+    if (qLower.includes(name.toLowerCase())) {
+      return name;
+    }
+  }
+
+  // Regex extraction after spatial prepositions (e.g. "di daerah medan kota", "di wilayah bogor")
+  const match = qClean.match(
+    /(?:di\s+daerah|di\s+wilayah|di\s+kawasan|di\s+kota|di\s+kabupaten|di\s+kecamatan|di\s+provinsi|daerah|wilayah|kota|kabupaten|kecamatan|provinsi|di|in|around)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+){0,2})/i
+  );
+  if (match && match[1]) {
+    const stopwords = new Set([
+      "indonesia", "sana", "sini", "situ", "mana", "atas", "bawah", "peta",
+      "hari", "ini", "sekarang", "terkini", "terbaru", "live", "yang", "ada",
+      "tidak", "apakah", "dengan", "untuk", "dari", "pada", "dalam",
+    ]);
+    const tokens = match[1]
+      .trim()
+      .split(/\s+/)
+      .filter((t) => !stopwords.has(t.toLowerCase()));
+    if (tokens.length > 0) {
+      const candidate = tokens
+        .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+        .join(" ");
+      if (candidate.length >= 3) return candidate;
+    }
+  }
+
+  return "Indonesia";
 }
 
 /**
@@ -26,6 +74,7 @@ export async function fetchMonitoringHotspots(
   region = "Indonesia",
   limit = 30
 ): Promise<MonitoringHotspotsResponse> {
+  const isBroadQuery = ["indonesia", "idn"].includes(region.trim().toLowerCase());
   try {
     const res = await fetch(
       `${API_URL}/api/hotspots/monitoring?region=${encodeURIComponent(region)}&limit=${limit}`,
@@ -33,11 +82,28 @@ export async function fetchMonitoringHotspots(
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as MonitoringHotspotsResponse;
-    if (Array.isArray(data.hotspots) && data.hotspots.length > 0) {
+    if (Array.isArray(data.hotspots) && (data.hotspots.length > 0 || !isBroadQuery)) {
       return data;
     }
-    throw new Error("Empty hotspot list");
+    throw new Error("Empty hotspot list for broad archipelago query");
   } catch {
+    if (!isBroadQuery) {
+      const rLower = region.trim().toLowerCase();
+      const filtered = SAMPLE_HOTSPOTS.filter(
+        (h) =>
+          h.location.toLowerCase().includes(rLower) ||
+          (h.district && h.district.toLowerCase().includes(rLower)) ||
+          (rLower === "kalimantan" && (h.district ?? "").toLowerCase().includes("kalimantan"))
+      );
+      return {
+        is_live: false,
+        source: "Local Fallback Cache",
+        total_raw_hotspots: filtered.reduce((acc, h) => acc + (h.hotspotCount ?? 1), 0),
+        cluster_count: filtered.length,
+        updated_at: new Date().toISOString(),
+        hotspots: filtered,
+      };
+    }
     return {
       is_live: false,
       source: "Local Fallback Cache",
@@ -55,21 +121,22 @@ export async function fetchMonitoringHotspots(
  * stays usable during frontend-only development.
  */
 export async function startInvestigation(query: string): Promise<Investigation> {
+  const detectedRegion = guessRegion(query);
   try {
     const res = await fetch(`${API_URL}/api/investigations/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, region: guessRegion(query) }),
+      body: JSON.stringify({ query, region: detectedRegion }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as Investigation;
-    return { ...data, region: data.region ?? guessRegion(query) };
+    return { ...data, region: data.region || detectedRegion };
   } catch {
     return {
       id: `local-${Date.now()}`,
       status: "running",
       query,
-      region: guessRegion(query),
+      region: detectedRegion,
       created_at: new Date().toISOString(),
     };
   }
