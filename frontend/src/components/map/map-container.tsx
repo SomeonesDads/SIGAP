@@ -246,7 +246,7 @@ export function MapContainer({
 
 
         // --- LAYER 4: LAHAN GAMBUT (PEATLAND) ---
-        const peatlandCoords = [
+        const peatlandCoords: [number, number][] = [
           [center[0] + 0.05, center[1] - 0.06],
           [center[0] + 0.06, center[1] + 0.06],
           [center[0] - 0.06, center[1] + 0.06],
@@ -273,7 +273,7 @@ export function MapContainer({
         peatPolygon.addTo(groups.peatland);
 
         // --- LAYER 5: PERMUKIMAN & BUFFER ---
-        const settlementPoint = [center[0] - 0.035, center[1] - 0.025];
+        const settlementPoint: [number, number] = [center[0] - 0.035, center[1] - 0.025];
         const settlementMarker = L.circleMarker(settlementPoint, {
           radius: 8,
           fillColor: "#06b6d4",
@@ -408,7 +408,7 @@ export function MapContainer({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-inner",
+        "relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner",
         height,
         className
       )}
@@ -418,17 +418,17 @@ export function MapContainer({
 
       {/* Loading state indicator */}
       {isLoading && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm text-slate-300">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-100 backdrop-blur-sm text-slate-700">
           <Loader2 className="h-8 w-8 animate-spin text-amber-500 mb-2" />
           <span className="text-xs font-medium">Memuat Peta Spasial...</span>
         </div>
       )}
 
       {/* Top Map Header / Controls Overlay */}
-      <div className="absolute top-3 left-3 z-[400] flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-lg text-xs backdrop-blur-md text-slate-200 shadow-lg">
-        <Compass className="h-4 w-4 text-amber-400" />
+      <div className="absolute top-3 left-3 z-[400] flex items-center gap-2 bg-white border border-slate-300/80 px-3 py-1.5 rounded-lg text-xs backdrop-blur-md text-slate-800 shadow-lg">
+        <Compass className="h-4 w-4 text-amber-700" />
         <span className="font-semibold">{title || "Peta Analisis Spasial Karhutla"}</span>
-        <span className="text-slate-400 border-l border-slate-700 pl-2">
+        <span className="text-slate-600 border-l border-slate-300 pl-2">
           {center[0].toFixed(4)}°, {center[1].toFixed(4)}°
         </span>
       </div>
@@ -439,14 +439,14 @@ export function MapContainer({
           {activeLayers.slice(0, 3).map((layer) => (
             <span
               key={layer}
-              className="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-900/90 border border-slate-700/80 text-amber-300 backdrop-blur-md flex items-center gap-1 shadow-md"
+              className="px-2 py-0.5 text-[11px] font-medium rounded-md bg-white border border-slate-300/80 text-amber-700 backdrop-blur-md flex items-center gap-1 shadow-md"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               {layer}
             </span>
           ))}
           {activeLayers.length > 3 && (
-            <span className="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-900/90 border border-slate-700/80 text-slate-300">
+            <span className="px-2 py-0.5 text-[11px] font-medium rounded-md bg-white border border-slate-300/80 text-slate-700">
               +{activeLayers.length - 3} lagi
             </span>
           )}
@@ -454,15 +454,15 @@ export function MapContainer({
       )}
 
       {/* Bottom Left: Google Maps Basemap Switcher */}
-      <div className="absolute bottom-3 left-3 z-[400] flex items-center bg-slate-900/95 border border-slate-700/80 rounded-lg p-0.5 shadow-xl backdrop-blur-md text-xs">
+      <div className="absolute bottom-3 left-3 z-[400] flex items-center bg-white border border-slate-300/80 rounded-lg p-0.5 shadow-xl backdrop-blur-md text-xs">
         <button
           type="button"
           onClick={() => setBasemap("satellite")}
           className={cn(
             "px-2.5 py-1 rounded-md font-medium transition-all text-[11px]",
             basemap === "satellite"
-              ? "bg-amber-500 text-slate-950 font-semibold shadow-sm"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-sigap-cobalt text-white font-semibold shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
           )}
         >
           Google Satelit
@@ -473,8 +473,8 @@ export function MapContainer({
           className={cn(
             "px-2.5 py-1 rounded-md font-medium transition-all text-[11px]",
             basemap === "roadmap"
-              ? "bg-amber-500 text-slate-950 font-semibold shadow-sm"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-sigap-cobalt text-white font-semibold shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
           )}
         >
           Google Peta
@@ -485,8 +485,8 @@ export function MapContainer({
           className={cn(
             "px-2.5 py-1 rounded-md font-medium transition-all text-[11px]",
             basemap === "terrain"
-              ? "bg-amber-500 text-slate-950 font-semibold shadow-sm"
-              : "text-slate-400 hover:text-slate-200"
+              ? "bg-sigap-cobalt text-white font-semibold shadow-sm"
+              : "text-slate-600 hover:text-slate-800"
           )}
         >
           Google Medan
@@ -495,11 +495,11 @@ export function MapContainer({
 
       {/* Bottom Right: Zoom Controls */}
       {interactive && (
-        <div className="absolute bottom-3 right-3 z-[400] flex flex-col gap-1.5 bg-slate-900/90 border border-slate-700/80 p-1 rounded-lg backdrop-blur-md shadow-xl">
+        <div className="absolute bottom-3 right-3 z-[400] flex flex-col gap-1.5 bg-white border border-slate-300/80 p-1 rounded-lg backdrop-blur-md shadow-xl">
           <button
             type="button"
             onClick={handleZoomIn}
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+            className="p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
             title="Perbesar (Zoom In)"
           >
             <ZoomIn className="h-4 w-4" />
@@ -507,7 +507,7 @@ export function MapContainer({
           <button
             type="button"
             onClick={handleZoomOut}
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+            className="p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors"
             title="Perkecil (Zoom Out)"
           >
             <ZoomOut className="h-4 w-4" />

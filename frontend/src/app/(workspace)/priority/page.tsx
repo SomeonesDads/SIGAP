@@ -13,13 +13,13 @@ export default function PriorityPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
-            <ShieldCheck className="h-7 w-7 text-amber-400" />
+          <h1 className="text-2xl md:text-3xl font-mono font-medium tracking-[-0.02em] text-black flex items-center gap-2.5">
+            <ShieldCheck className="h-7 w-7 text-amber-700" />
             <span>Priority Assessment & Response Matrix</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 mt-1">
             Penentuan urutan prioritas verifikasi lapangan, pemadaman darat (Manggala Agni), dan alokasi water bombing (BPBD).
           </p>
         </div>
@@ -37,7 +37,7 @@ export default function PriorityPage() {
       </div>
 
       {/* Priority Summary Banner */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-300 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="flex h-3 w-3 rounded-full bg-rose-500 animate-pulse" />
           <span>
