@@ -1,0 +1,133 @@
+# ==============================================================================
+# SIGAP — Agen Karhutla .gitignore
+# ==============================================================================
+
+# --- Environment & Secrets ---
+.env
+.env*.local
+*.env
+!.env.example
+*.pem
+*.key
+*.crt
+*credentials*.json
+service_account*.json
+gcp-key*.json
+ee-*.json
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Python Tooling & Testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# --- Node.js & Next.js ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+.next/
+out/
+.turbo/
+
+# Next.js bundle analysis
+.next-analyze/
+
+# --- Machine Learning Weights & Models ---
+weights/
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.h5
+*.pb
+*.pkl
+*.joblib
+
+# --- Satellite & Geospatial Data ---
+data/raw/
+data/processed/
+*.tif
+*.tiff
+*.geotiff
+*.img
+*.nc
+*.hdf
+*.hdf5
+*.dem
+
+# Intermediate GIS shapefiles / rasters
+*.shp.cache
+*.geojson.cache
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints/
+*-checkpoint.ipynb
+
+# --- Operating System & IDE Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# Editors
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary & Log files
+*.log
+logs/
+scratch/
+tmp/
+temp/
