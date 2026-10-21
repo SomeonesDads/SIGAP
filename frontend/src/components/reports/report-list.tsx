@@ -1,23 +1,26 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   FileText,
-  Download,
   Search,
   Filter,
-  CheckCircle2,
-  Clock,
-  Eye,
   FileCode,
-  Share2,
   Calendar,
+  DownloadCloud,
+  PlusCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Report } from "@/lib/types";
+import {
+  fetchReportGeoJSON,
+  fetchReports,
+  getReportDownloadUrl,
+  type LiveReportItem,
+} from "@/lib/api";
 
-const INITIAL_REPORTS: Report[] = [
+const INITIAL_REPORTS: LiveReportItem[] = [
   {
     id: "REP-2026-001",
     caseNumber: "SIGAP-2026-089",
@@ -26,69 +29,33 @@ const INITIAL_REPORTS: Report[] = [
     status: "Draft",
     examiner: "SIGAP Agent AI (Manggala Agni Daops Kapuas)",
     summary:
-      "Deteksi 18 titik panas VIIRS di lahan gambut dalam (>3m). Estimasi U-Net 1,240 Ha. Skor prioritas 95 (Kritis).",
+      "Deteksi 18 titik panas VIIRS di lahan gambut dalam (>3m). Estimasi DINOv3 1,240 Ha. Skor prioritas 95 (Kritis).",
     totalBurnedAreaHa: 1240,
     priorityScore: 95,
     exportFormats: ["pdf", "geojson"],
-  },
-  {
-    id: "REP-2026-002",
-    caseNumber: "SIGAP-2026-088",
-    region: "Ketapang, Kalimantan Barat",
-    date: "20 Okt 2026",
-    status: "Selesai",
-    examiner: "BPBD Kalbar / Tim Analis Citra",
-    summary:
-      "Perambatan ke batas hutan tanaman industri. Citra Landsat-8 terkonfirmasi dNBR 0.58. Sekat bakar telah dibuat sepanjang 3 km.",
-    totalBurnedAreaHa: 890,
-    priorityScore: 86,
-    exportFormats: ["pdf", "geojson"],
-  },
-  {
-    id: "REP-2026-003",
-    caseNumber: "SIGAP-2026-087",
-    region: "Ogan Komering Ilir, Sumatera Selatan",
-    date: "19 Okt 2026",
-    status: "Ditinjau",
-    examiner: "KPH Wilayah II Sumsel",
-    summary:
-      "Kebakaran pada bekas areal kebakaran 2019 kanal restorasi gambut. Dilakukan pembasahan manual 2 unit pompa jinjing.",
-    totalBurnedAreaHa: 420,
-    priorityScore: 81,
-    exportFormats: ["pdf", "geojson"],
-  },
-  {
-    id: "REP-2026-004",
-    caseNumber: "SIGAP-2026-086",
-    region: "TN Sebangau, Kalimantan Tengah",
-    date: "18 Okt 2026",
-    status: "Arsip",
-    examiner: "Balai Taman Nasional Sebangau",
-    summary:
-      "Spot fire tepi zona penyangga berhasil diisolasi sebelum memasuki hutan primer rawa gambut.",
-    totalBurnedAreaHa: 1300,
-    priorityScore: 74,
-    exportFormats: ["pdf", "geojson"],
-  },
-  {
-    id: "REP-2026-005",
-    caseNumber: "SIGAP-2026-085",
-    region: "Rokan Hilir, Riau",
-    date: "15 Okt 2026",
-    status: "Selesai",
-    examiner: "Manggala Agni Daops Dumai",
-    summary:
-      "Verifikasi anomali termal pada perkebunan kelapa sawit rakyat. Terkendali oleh Masyarakat Peduli Api.",
-    totalBurnedAreaHa: 180,
-    priorityScore: 68,
-    exportFormats: ["pdf", "geojson"],
+    lat: -2.85,
+    lon: 114.12,
   },
 ];
 
 export function ReportList() {
-  const [reports] = useState<Report[]>(INITIAL_REPORTS);
+  const [reports, setReports] = useState<LiveReportItem[]>(INITIAL_REPORTS);
+  const [isLive, setIsLive] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchReports("Kalimantan", 10).then((res) => {
+      if (!active || !res || !res.reports.length) return;
+      setReports(res.reports);
+      setIsLive(res.is_live);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
@@ -102,14 +69,111 @@ export function ReportList() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleExport = (format: "pdf" | "geojson", reportId: string) => {
-    alert(
-      `Mengunduh berkas laporan format ${format.toUpperCase()} untuk dokumen ${reportId}...`
-    );
+  const handleExport = async (
+    format: "pdf" | "geojson",
+    report: LiveReportItem
+  ) => {
+    const key = `${report.caseNumber}:${format}`;
+    setExportingKey(key);
+    try {
+      if (format === "pdf") {
+        const url = getReportDownloadUrl(
+          report.caseNumber,
+          report.lat,
+          report.lon
+        );
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `SIGAP_Report_${report.caseNumber}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        const geojson = await fetchReportGeoJSON(
+          report.caseNumber,
+          report.lat,
+          report.lon
+        );
+        if (!geojson) return;
+        const blob = new Blob([JSON.stringify(geojson, null, 2)], {
+          type: "application/geo+json",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `SIGAP_Spatial_${report.caseNumber}.geojson`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  const handleExportAllBundle = () => {
+    const bundle = {
+      generated_at: new Date().toISOString(),
+      source: isLive ? "LIVE NASA FIRMS + DINOv3" : "SIGAP Archive",
+      total_cases: filteredReports.length,
+      cases: filteredReports,
+    };
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SIGAP_Case_History_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl md:text-3xl font-mono font-medium tracking-[-0.02em] text-black flex items-center gap-2.5">
+              <FileText className="h-7 w-7 text-amber-700" />
+              <span>Reports & Case History</span>
+            </h1>
+            {isLive && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-500/30">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                LIVE NASA FIRMS + DINOV3
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-slate-600 mt-1">
+            Dokumentasi berkas hasil investigasi AI, evaluasi kerusakan vegetasi DINOv3, dan ekspor PDF/GeoJSON langsung.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExportAllBundle}
+            className="text-xs gap-1.5"
+          >
+            <DownloadCloud className="h-3.5 w-3.5" />
+            <span>Unduh Semua Berkas (JSON)</span>
+          </Button>
+
+          <Link href="/investigation">
+            <Button variant="primary" size="sm" className="text-xs gap-1.5">
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span>Investigasi Baru</span>
+            </Button>
+          </Link>
+        </div>
+      </div>
+
       {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="relative w-full sm:w-96">
@@ -202,6 +266,7 @@ export function ReportList() {
                       {r.totalBurnedAreaHa && (
                         <div className="text-[11px] text-amber-700/90 font-medium">
                           Luas: {r.totalBurnedAreaHa.toLocaleString()} Ha
+                          {r.priorityScore ? ` • Skor MCDA: ${r.priorityScore}/100` : ""}
                         </div>
                       )}
                     </td>
@@ -230,9 +295,10 @@ export function ReportList() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleExport("pdf", r.caseNumber)}
+                          disabled={exportingKey === `${r.caseNumber}:pdf`}
+                          onClick={() => handleExport("pdf", r)}
                           className="h-8 px-2.5 text-xs gap-1 border-slate-300 hover:border-amber-500/50 hover:text-amber-700"
-                          title="Ekspor PDF Formal"
+                          title="Unduh Laporan PDF Formal"
                         >
                           <FileText className="h-3.5 w-3.5 text-rose-700" />
                           <span>PDF</span>
@@ -241,9 +307,10 @@ export function ReportList() {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleExport("geojson", r.caseNumber)}
+                          disabled={exportingKey === `${r.caseNumber}:geojson`}
+                          onClick={() => handleExport("geojson", r)}
                           className="h-8 px-2.5 text-xs gap-1 border-slate-300 hover:border-amber-500/50 hover:text-amber-700"
-                          title="Ekspor Spasial GeoJSON"
+                          title="Ekspor Spasial GeoJSON (DINOv3 + FIRMS)"
                         >
                           <FileCode className="h-3.5 w-3.5 text-emerald-700" />
                           <span>GeoJSON</span>

@@ -9,15 +9,13 @@ import {
   Loader2,
   Clock,
   Sparkles,
-  Layers,
-  ArrowRight,
   ShieldCheck,
   RotateCcw,
   Download,
-  AlertCircle,
   FileCode,
 } from "lucide-react";
 import { useChat } from "@/hooks/use-chat";
+import { getReportDownloadUrl } from "@/lib/api";
 import { ChatMessage } from "@/components/chat/chat-message";
 import { ChatInput } from "@/components/chat/chat-input";
 import { Card } from "@/components/ui/card";
@@ -32,6 +30,7 @@ function InvestigationContent() {
     isLoading,
     currentSteps,
     decisionLogs,
+    activeCluster,
     sendMessage,
     clearMessages,
   } = useChat();
@@ -43,74 +42,42 @@ function InvestigationContent() {
     }
   }, [queryParam, sendMessage, messages.length]);
 
-  // Fallback default sample steps if none have been run yet
-  const displaySteps =
-    currentSteps.length > 0
-      ? currentSteps
-      : [
-          {
-            id: "step-sample-1",
-            title: "Pengenalan Intent & Ekstraksi Lokasi",
-            description: "Sistem mengenali koordinat bounding box dan target waktu.",
-            status: "completed" as const,
-            timestamp: "10:02:14",
-          },
-          {
-            id: "step-sample-2",
-            title: "Agregasi Hotspot NASA FIRMS (VIIRS 375m)",
-            description: "Memfilter titik anomali termal dengan tingkat keyakinan nominal/tinggi.",
-            status: "completed" as const,
-            timestamp: "10:02:19",
-          },
-          {
-            id: "step-sample-3",
-            title: "Seleksi & Akuisisi Citra Landsat 8/9 GEE",
-            description: "Komposit 3-hari diaktifkan untuk mengatasi tutupan awan (tutupan bersih < 15%).",
-            status: "completed" as const,
-            timestamp: "10:02:25",
-          },
-          {
-            id: "step-sample-4",
-            title: "Segmentasi U-Net & Deteksi Burn Scar",
-            description: "1,240 Ha area terbakar terdeteksi dengan kelas keparahan dNBR Tinggi.",
-            status: "completed" as const,
-            timestamp: "10:02:31",
-          },
-          {
-            id: "step-sample-5",
-            title: "Matriks Penilaian Dampak & Aksesibilitas",
-            description: "Skor risiko 94/100 (Lahan gambut dalam >3m, 800m ke permukiman Desa Garung).",
-            status: "completed" as const,
-            timestamp: "10:02:38",
-          },
-        ];
+  const handleExportDecisionsJson = () => {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      agent: "SIGAP Wildfire Response Orchestrator",
+      active_cluster: activeCluster,
+      execution_steps: currentSteps,
+      decision_audit_log: decisionLogs,
+      conversation: messages,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SIGAP_Investigation_Audit_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
-  const displayDecisionLogs =
-    decisionLogs.length > 0
-      ? decisionLogs
-      : [
-          {
-            id: "dec-sample-1",
-            step: "AOI Definition",
-            decision: "Cakupan area dibatasi pada koordinat [-3.15, 114.05, -2.85, 114.35].",
-            reasoning: "Densitas titik panas FIRMS terakumulasi dalam klaster 15 km persegi.",
-            timestamp: "10:02:16",
-          },
-          {
-            id: "dec-sample-2",
-            step: "Cloud Cover Strategy",
-            decision: "Mengganti citra tanggal 18 Okt dengan komposit 3-hari terdekat.",
-            reasoning: "Tutupan awan scene 18 Okt melebihi toleransi (45% awan tebal).",
-            timestamp: "10:02:22",
-          },
-          {
-            id: "dec-sample-3",
-            step: "Priority Scoring",
-            decision: "Menetapkan status respon cepat: Kategori A (Siaga Lapangan).",
-            reasoning: "Zona berada di hamparan kubah gambut berjarak 850m dari permukiman warga.",
-            timestamp: "10:02:30",
-          },
-        ];
+  const handleDownloadSessionPdf = () => {
+    const caseId = activeCluster?.id || "SIGAP-2026-LIVE-01";
+    const url = getReportDownloadUrl(
+      caseId,
+      activeCluster?.lat,
+      activeCluster?.lon
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `SIGAP_Session_Report_${caseId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   return (
     <div className="space-y-4">
@@ -122,9 +89,12 @@ function InvestigationContent() {
             <h1 className="text-xl md:text-2xl font-mono font-medium tracking-[-0.02em] text-black">
               AI Investigation Workspace
             </h1>
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-500/30">
+              LIVE FIRMS + AWS STAC + DINOV3
+            </span>
           </div>
           <p className="text-xs text-slate-600 mt-0.5">
-            Lingkungan kerja percakapan otonom: inferensi model, analisis spasial, dan alur pengambilan keputusan.
+            Lingkungan kerja percakapan otonom: inferensi DINOv3 pada citra Sentinel-2 L2A (AWS STAC), analisis spasial, dan audit keputusan.
           </p>
         </div>
 
@@ -187,7 +157,7 @@ function InvestigationContent() {
                     Agen sedang mengevaluasi data...
                   </span>
                   <span className="text-[11px] text-slate-600">
-                    Memproses query spasial, memeriksa citra satelit, dan menghitung estimasi U-Net
+                    Memproses query spasial FIRMS, mengambil scene AWS STAC Sentinel-2, dan menjalankan DINOv3
                   </span>
                 </div>
               </div>
@@ -216,12 +186,17 @@ function InvestigationContent() {
                 </h3>
               </div>
               <span className="text-[10px] font-mono text-slate-600">
-                5 Langkah Kerja
+                {currentSteps.length || 5} Langkah Kerja
               </span>
             </div>
 
             <div className="mt-4 space-y-4 relative before:absolute before:left-3.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
-              {displaySteps.map((step) => {
+              {currentSteps.length === 0 && (
+                <div className="text-xs text-slate-500 py-4 text-center">
+                  Memuat telemetri klaster live NASA FIRMS & AWS STAC...
+                </div>
+              )}
+              {currentSteps.map((step) => {
                 const isCompleted = step.status === "completed";
                 const isRunning = step.status === "running";
                 const isPending = step.status === "pending";
@@ -301,7 +276,7 @@ function InvestigationContent() {
             </p>
 
             <div className="space-y-2.5">
-              {displayDecisionLogs.map((log) => (
+              {decisionLogs.map((log) => (
                 <div
                   key={log.id}
                   className="rounded-lg border border-slate-200 bg-slate-100 p-3 text-xs space-y-1.5"
@@ -329,11 +304,21 @@ function InvestigationContent() {
 
             {/* Quick Export / Link to Report */}
             <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
-              <Button variant="secondary" size="sm" className="text-xs gap-1.5 w-full">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExportDecisionsJson}
+                className="text-xs gap-1.5 w-full"
+              >
                 <FileCode className="h-3.5 w-3.5" />
                 <span>Ekspor Keputusan (JSON)</span>
               </Button>
-              <Button variant="secondary" size="sm" className="text-xs gap-1.5 w-full">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDownloadSessionPdf}
+                className="text-xs gap-1.5 w-full"
+              >
                 <Download className="h-3.5 w-3.5" />
                 <span>Unduh Laporan Sesi</span>
               </Button>
