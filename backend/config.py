@@ -7,8 +7,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
 
-    GOOGLE_CLOUD_PROJECT: str = ""
+    GOOGLE_CLOUD_PROJECT: str = "hackathon-primestep-04"
     GOOGLE_APPLICATION_CREDENTIALS: str = ""
+    VERTEX_LOCATION: str = "us-west1"
+    VERTEX_DINOV3_ENDPOINT_ID: str = "936548611376807936"
+    DINOV3_ENDPOINT_URL: str = (
+        "https://us-west1-aiplatform.googleapis.com/v1/"
+        "projects/hackathon-primestep-04/locations/us-west1/endpoints/936548611376807936:predict"
+    )
     EARTH_ENGINE_PROJECT: str = ""
     NASA_FIRMS_API_KEY: str = ""
     DATABASE_URL: str = ""

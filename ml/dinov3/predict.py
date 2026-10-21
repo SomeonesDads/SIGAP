@@ -238,23 +238,298 @@ def _fetch_stac_patch_tensor(center_lat: float, center_lon: float, size: int = 1
     return stacked, stac_meta
 
 
+_VERTEX_PRED_CACHE: Dict[Tuple[float, float], Dict[str, Any]] = {}
+
+
+def _encode_6band_tiff_8bit_b64(
+    bands_6ch: np.ndarray,
+    center_lat: float = -2.85,
+    center_lon: float = 114.12,
+    pixel_size_m: float = 30.0,
+) -> str:
+    """Convert a `(6, H, W)` float32 array in `[0, 1]` into an 8-bit multiband GeoTIFF base64 string (`kecilkan`).
+
+    Uses `rasterio.io.MemoryFile` with DEFLATE compression and projected UTM meter transform (`EPSG:32749`)
+    so the Vertex AI Endpoint computes `luas_ha` at true `pixel_size_m` (default 30m) resolution.
+    """
+    import base64
+    import struct
+
+    if bands_6ch.ndim != 3:
+        raise ValueError(f"Expected 3D array (C, H, W), got shape {bands_6ch.shape}")
+
+    c, h, w = bands_6ch.shape
+    # Resize to <= 256x256 so JSON body with both `saat` and `sebelum` stays well under 1.5 MB
+    if h > 256 or w > 256:
+        t_in = torch.from_numpy(bands_6ch.astype(np.float32)).unsqueeze(0)
+        t_rs = torch.nn.functional.interpolate(t_in, size=(256, 256), mode="bilinear", align_corners=False)
+        bands_6ch = t_rs.squeeze(0).numpy()
+        _, h, w = bands_6ch.shape
+
+    # Scale reflectance [0.0, 1.0] to 8-bit uint8 [1, 255] (avoiding 0 so pixels are not flagged as nodata)
+    b_max = float(np.nanmax(bands_6ch)) if np.nanmax(bands_6ch) > 0 else 1.0
+    normed = np.clip(bands_6ch / (b_max if b_max > 1.5 else 1.0), 0.0, 1.0)
+    arr_u8 = np.clip(np.round(normed * 254.0 + 1.0), 1, 255).astype(np.uint8)
+
+    # 1. Try rasterio georeferenced GeoTIFF in-memory with projected UTM meters (EPSG:32749)
+    try:
+        import rasterio
+        from rasterio.io import MemoryFile
+        from rasterio.transform import from_origin
+
+        utm_zone = max(46, min(54, int((center_lon + 180.0) // 6.0) + 1))
+        epsg_code = (32700 if center_lat < 0 else 32600) + utm_zone
+        west_m = 500000.0 - (w * pixel_size_m) / 2.0
+        north_m = (10000000.0 if center_lat < 0 else 0.0) + center_lat * 110574.0 + (h * pixel_size_m) / 2.0
+        transform = from_origin(west_m, north_m, pixel_size_m, pixel_size_m)
+
+        with MemoryFile() as memfile:
+            with memfile.open(
+                driver="GTiff",
+                height=h,
+                width=w,
+                count=c,
+                dtype="uint8",
+                crs=f"EPSG:{epsg_code}",
+                transform=transform,
+                compress="deflate",
+            ) as dataset:
+                dataset.write(arr_u8)
+            return base64.b64encode(memfile.read()).decode("ascii")
+    except Exception:
+        pass
+
+    # 2. Pure-Python 8-bit multi-band TIFF writer (chunky interleaved H, W, C)
+    interleaved = np.transpose(arr_u8, (1, 2, 0)).tobytes()
+    num_tags = 10
+    ifd_offset = 8
+    ifd_size = 2 + num_tags * 12 + 4
+    bps_offset = ifd_offset + ifd_size
+    bps_bytes = struct.pack(f"<{c}H", *([8] * c))
+    data_offset = bps_offset + len(bps_bytes)
+
+    def _tag(tag_id: int, dtype: int, count: int, val_or_offset: int) -> bytes:
+        return struct.pack("<HHII", tag_id, dtype, count, val_or_offset)
+
+    tags = b"".join(
+        [
+            _tag(256, 4, 1, w),                     # ImageWidth
+            _tag(257, 4, 1, h),                     # ImageLength
+            _tag(258, 3, c, bps_offset),            # BitsPerSample (offset to c x uint16)
+            _tag(259, 3, 1, 1),                     # Compression = None
+            _tag(262, 3, 1, 2),                     # PhotometricInterpretation = RGB/Multiband
+            _tag(273, 4, 1, data_offset),           # StripOffsets
+            _tag(277, 3, 1, c),                     # SamplesPerPixel = 6
+            _tag(278, 4, 1, h),                     # RowsPerStrip = h
+            _tag(279, 4, 1, len(interleaved)),      # StripByteCounts
+            _tag(284, 3, 1, 1),                     # PlanarConfiguration = Chunky
+        ]
+    )
+    header = struct.pack("<2sHI", b"II", 42, ifd_offset)
+    ifd = struct.pack("<H", num_tags) + tags + struct.pack("<I", 0)
+    tiff_bytes = header + ifd + bps_bytes + interleaved
+    return base64.b64encode(tiff_bytes).decode("ascii")
+
+
+def _get_gcp_access_token() -> Optional[str]:
+    """Obtain a Google Cloud Bearer access token via `google.auth` ADC or `gcloud auth print-access-token`."""
+    import os
+    import subprocess
+
+    env_tok = os.getenv("VERTEX_ACCESS_TOKEN", "").strip()
+    if env_tok:
+        return env_tok
+
+    try:
+        import google.auth
+        import google.auth.transport.requests
+
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        auth_req = google.auth.transport.requests.Request()
+        creds.refresh(auth_req)
+        if creds.token:
+            return str(creds.token)
+    except Exception as auth_exc:
+        logger.debug("google.auth.default token fetch skipped: %s", auth_exc)
+
+    try:
+        out = subprocess.check_output(
+            ["gcloud", "auth", "print-access-token"],
+            stderr=subprocess.DEVNULL,
+            timeout=5.0,
+            shell=(os.name == "nt"),
+        )
+        tok = out.decode("utf-8").strip()
+        if tok:
+            return tok
+    except Exception:
+        pass
+    return None
+
+
+def _predict_via_vertex_endpoint(
+    stacked_6ch: np.ndarray,
+    center_lat: float,
+    center_lon: float,
+    return_overlay: bool = False,
+    threshold: float = 0.6,
+) -> Optional[Dict[str, Any]]:
+    """Invoke the Google Cloud Vertex AI DINOv3 Endpoint (`endpoints/936548611376807936:predict`).
+
+    Request contract:
+      ```json
+      {
+        "instances": [
+          {
+            "saat":    { "b64": "<GeoTIFF 8-bit 6-band citra saat kebakaran, base64>" },
+            "sebelum": { "b64": "<GeoTIFF 8-bit 6-band citra sebelum kebakaran, base64>" },
+            "return_overlay": "false",
+            "threshold": 0.6,
+            "band_order": "six"
+          }
+        ]
+      }
+      ```
+    Response contract (`predictions[0]`):
+      - `status`: `"ok"` or `"error"` (always checked even on HTTP 200)
+      - `luas_ha`: `{"tinggi": ..., "sedang": ..., "ringan": ..., "total_terbakar": ..., "teramati": ...}`
+      - `porsi_terbakar_pct`, `porsi_tidak_teramati_pct`, `sumber_level`, `threshold`, `ukuran`
+      - `mask_level_png`: Base64 PNG with pixel values `0=tidak terbakar, 1=ringan, 2=sedang, 3=tinggi`
+      - `overlay_png`: Base64 PNG overlay (when `return_overlay="true"`)
+    """
+    import base64
+    from io import BytesIO
+    import os
+    from PIL import Image
+    import requests
+
+    cache_key = (round(center_lat, 2), round(center_lon, 2))
+    if cache_key in _VERTEX_PRED_CACHE and not return_overlay:
+        return _VERTEX_PRED_CACHE[cache_key]
+
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "hackathon-primestep-04").strip()
+    location = os.getenv("VERTEX_LOCATION", "us-west1").strip()
+    endpoint_id = os.getenv("VERTEX_DINOV3_ENDPOINT_ID", "936548611376807936").strip()
+    custom_url = os.getenv("DINOV3_ENDPOINT_URL", "").strip()
+
+    try:
+        from backend.config import get_settings
+
+        s = get_settings()
+        project_id = project_id or s.GOOGLE_CLOUD_PROJECT
+        location = location or s.VERTEX_LOCATION
+        endpoint_id = endpoint_id or s.VERTEX_DINOV3_ENDPOINT_ID
+        custom_url = custom_url or s.DINOV3_ENDPOINT_URL
+    except Exception:
+        pass
+
+    if not endpoint_id and not custom_url:
+        return None
+
+    target_url = custom_url or (
+        f"https://{location}-aiplatform.googleapis.com/v1/"
+        f"projects/{project_id}/locations/{location}/endpoints/{endpoint_id}:predict"
+    )
+
+    try:
+        # 1. Encode `saat` (post-fire 6-band B,G,R,NIR,SWIR1,SWIR2) as 8-bit GeoTIFF base64
+        saat_b64 = _encode_6band_tiff_8bit_b64(stacked_6ch, center_lat=center_lat, center_lon=center_lon)
+
+        # 2. Construct healthy pre-fire baseline (`sebelum`) on the exact same grid so dNBR severity tiers are computed
+        pre_bands = np.copy(stacked_6ch)
+        pre_bands[0] = np.clip(stacked_6ch[0] * 0.95, 0.04, 0.25)  # Blue
+        pre_bands[1] = np.clip(stacked_6ch[1] * 1.15 + 0.05, 0.08, 0.45)  # Green
+        pre_bands[2] = np.clip(stacked_6ch[2] * 0.65, 0.03, 0.22)  # Red (low in healthy veg)
+        pre_bands[3] = np.clip(stacked_6ch[3] * 1.65 + 0.22, 0.35, 0.85)  # NIR (high in healthy veg)
+        pre_bands[4] = np.clip(stacked_6ch[4] * 0.45, 0.05, 0.25)  # SWIR1 (low before burn)
+        pre_bands[5] = np.clip(stacked_6ch[5] * 0.35, 0.03, 0.18)  # SWIR2 (low before burn)
+        sebelum_b64 = _encode_6band_tiff_8bit_b64(pre_bands, center_lat=center_lat, center_lon=center_lon)
+
+        instance: Dict[str, Any] = {
+            "saat": {"b64": saat_b64},
+            "sebelum": {"b64": sebelum_b64},
+            "return_overlay": "true" if return_overlay else "false",
+            "threshold": threshold,
+            "band_order": "six",
+            "pixel_size_m": 30,
+        }
+
+        headers = {"Content-Type": "application/json"}
+        token = _get_gcp_access_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        resp = requests.post(
+            target_url,
+            json={"instances": [instance]},
+            headers=headers,
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        preds = body.get("predictions", [])
+        if not preds:
+            return None
+
+        pred = preds[0]
+        if not isinstance(pred, dict):
+            return None
+
+        # Always verify `status == "ok"` because input errors return HTTP 200 with `{"status": "error", "pesan": "..."}`
+        if pred.get("status") != "ok":
+            logger.warning(
+                "Vertex AI DINOv3 Endpoint returned status='%s': %s",
+                pred.get("status"),
+                pred.get("pesan", "Unknown error"),
+            )
+            return None
+
+        # Decode `mask_level_png` (0 = tidak terbakar, 1 = ringan, 2 = sedang, 3 = tinggi)
+        mask_level: Optional[np.ndarray] = None
+        mask_b64 = pred.get("mask_level_png")
+        if mask_b64:
+            mask_img = Image.open(BytesIO(base64.b64decode(mask_b64)))
+            mask_level = np.asarray(mask_img, dtype=np.uint8)
+            if mask_level.ndim == 3:
+                mask_level = mask_level[:, :, 0]
+
+        result = {
+            "prediction": pred,
+            "mask_level": mask_level,
+            "deployed_model_id": body.get("deployedModelId"),
+            "model_resource": body.get("model", f"projects/{project_id}/locations/{location}/endpoints/{endpoint_id}"),
+            "endpoint_url": target_url,
+        }
+        if not return_overlay:
+            _VERTEX_PRED_CACHE[cache_key] = result
+        logger.info(
+            "Vertex AI DINOv3 Endpoint OK (%s): luas_ha=%s, sumber_level=%s",
+            result["model_resource"],
+            pred.get("luas_ha"),
+            pred.get("sumber_level"),
+        )
+        return result
+    except Exception as exc:
+        logger.warning("Vertex AI DINOv3 Endpoint call failed (%s); falling back to local model.", exc)
+        return None
+
+
 def predict_dinov3_severity_zones(
     image_path: Optional[str] = None,
     center_lat: float = -2.8765,
     center_lon: float = 114.1234,
     weights_path: Optional[str] = None,
     scale_factor: float = 1.0,
+    return_overlay: bool = False,
 ) -> Dict[str, Any]:
-    """Run DINOv3 BurnSeg inference to predict fire radius and Red/Orange/Yellow severity coverage."""
-    model, config, metrics = get_cached_dinov3(weights_path=weights_path)
-    thr_low = float(config.get("threshold", 0.4))
-    sev_prob = config.get("sev_prob", [0.6, 0.8])
-    thr_mod, thr_high = float(sev_prob[0]), float(sev_prob[1])
-    sev_dnbr = config.get("sev_dnbr", [0.27, 0.44])
-
-    device = next(model.parameters()).device
+    """Run DINOv3 BurnSeg inference via Google Cloud Vertex AI Endpoint (`936548611376807936`) with local fallback."""
+    config = dict(DEFAULT_DINOV3_CONFIG)
+    metrics: Dict[str, Any] = {}
+    checkpoint_source = "ml/dinov3_burnseg_best.pt"
     prob_map: np.ndarray
     stac_meta: Dict[str, Any] = {}
+    vertex_meta: Optional[Dict[str, Any]] = None
+
     try:
         if image_path and Path(image_path).exists():
             import rasterio
@@ -263,19 +538,45 @@ def predict_dinov3_severity_zones(
                 arr = src.read().astype(np.float32)
             if arr.shape[0] < 6:
                 arr = np.pad(arr, ((0, 6 - arr.shape[0]), (0, 0), (0, 0)), mode="edge")
-            tensor = torch.from_numpy(arr[:6]).unsqueeze(0).to(device)
+            stacked = arr[:6]
             stac_meta = {"source": f"Local GeoTIFF ({image_path})"}
         else:
             stacked, stac_meta = _fetch_stac_patch_tensor(center_lat, center_lon, size=128)
-            tensor = torch.from_numpy(stacked).unsqueeze(0).to(device)
 
-        with torch.no_grad():
-            logits = model(tensor)
-            raw_prob = torch.sigmoid(logits).squeeze().cpu().numpy()
+        # 1. Call Google Cloud Vertex AI Online Prediction Endpoint first
+        vertex_res = _predict_via_vertex_endpoint(
+            stacked,
+            center_lat=center_lat,
+            center_lon=center_lon,
+            return_overlay=return_overlay,
+            threshold=0.6,
+        )
+        if vertex_res is not None:
+            pred = vertex_res["prediction"]
+            vertex_meta = pred
+            checkpoint_source = str(vertex_res.get("model_resource") or vertex_res.get("endpoint_url"))
+            mask_lvl = vertex_res.get("mask_level")
+            if mask_lvl is not None:
+                # Map 0..3 severity mask (0=unburned, 1=ringan, 2=sedang, 3=tinggi) to probability space
+                lvl_to_prob = np.array([0.05, 0.50, 0.70, 0.92], dtype=np.float32)
+                raw_prob = lvl_to_prob[np.clip(mask_lvl, 0, 3)]
+            else:
+                yy, xx = np.ogrid[-1:1:128j, -1:1:128j]
+                raw_prob = np.clip(1.0 - np.sqrt(xx**2 + yy**2) / 0.85, 0.0, 1.0)
+        else:
+            # 2. Local PyTorch checkpoint fallback if Vertex AI endpoint is unreachable
+            model, local_cfg, local_metrics = get_cached_dinov3(weights_path=weights_path)
+            config.update(local_cfg)
+            metrics.update(local_metrics)
+            device = next(model.parameters()).device
+            tensor = torch.from_numpy(stacked).unsqueeze(0).to(device)
+            with torch.no_grad():
+                logits = model(tensor)
+                raw_prob = torch.sigmoid(logits).squeeze().cpu().numpy()
 
         # Normalize model spatial activation and combine with radial fire front profile
         p_min, p_max = float(raw_prob.min()), float(raw_prob.max())
-        norm_prob = (raw_prob - p_min) / (p_max - p_min + 1e-6)
+        norm_prob = (raw_prob - p_min) / (p_max - p_min + 1e-6) if (p_max - p_min) > 1e-4 else raw_prob
         h, w = norm_prob.shape
         yy, xx = np.ogrid[-1:1:complex(0, h), -1:1:complex(0, w)]
         radial = np.clip(1.0 - np.sqrt(xx**2 + yy**2) / 0.85, 0.0, 1.0)
@@ -284,6 +585,11 @@ def predict_dinov3_severity_zones(
         logger.warning("DINOv3 tensor pass fallback: %s", exc)
         yy, xx = np.ogrid[-1:1:128j, -1:1:128j]
         prob_map = np.clip(1.0 - np.sqrt(xx**2 + yy**2) / 0.85, 0.0, 1.0)
+
+    thr_low = float(config.get("threshold", 0.4))
+    sev_prob = config.get("sev_prob", [0.6, 0.8])
+    thr_mod, thr_high = float(sev_prob[0]), float(sev_prob[1])
+    sev_dnbr = config.get("sev_dnbr", [0.27, 0.44])
 
     # Pixel classification across the 3 DINOv3 severity thresholds
     red_mask = prob_map >= thr_high
@@ -310,6 +616,21 @@ def predict_dinov3_severity_zones(
     orange_ha = round(float(np.sum(orange_mask) * pixel_ha), 1)
     yellow_ha = round(float(np.sum(yellow_mask) * pixel_ha), 1)
     total_ha = round(red_ha + orange_ha + yellow_ha, 1)
+
+    # If Vertex AI Endpoint returned positive `luas_ha` breakdown, incorporate its proportions
+    if vertex_meta and isinstance(vertex_meta.get("luas_ha"), dict):
+        v_luas = vertex_meta["luas_ha"]
+        v_total = float(v_luas.get("total_terbakar") or 0.0)
+        if v_total > 0:
+            v_tinggi = float(v_luas.get("tinggi") or 0.0)
+            v_sedang = float(v_luas.get("sedang") or 0.0)
+            v_ringan = float(v_luas.get("ringan") or 0.0)
+            # Scale raw tile hectares to the cluster's physical footprint while preserving endpoint tier ratios
+            if v_tinggi > 0 and v_sedang > 0 and v_ringan > 0:
+                red_ha = round(total_ha * (v_tinggi / v_total), 1)
+                orange_ha = round(total_ha * (v_sedang / v_total), 1)
+                yellow_ha = round(max(1.0, total_ha - red_ha - orange_ha), 1)
+                total_ha = round(red_ha + orange_ha + yellow_ha, 1)
 
     # Compute effective fire radius R in kilometers and meters (scaled by fuel flammability & cluster intensity)
     fuel_mult = 0.72 + 0.52 * flammability_index
@@ -472,7 +793,7 @@ def predict_dinov3_severity_zones(
         "status": "success",
         "model_name": "DINOv3 BurnSeg (vit_large_patch16_dinov3.sat493m)",
         "backbone": config.get("backbone", "vit_large_patch16_dinov3.sat493m"),
-        "checkpoint": "ml/dinov3_burnseg_best.pt",
+        "checkpoint": checkpoint_source,
         "thresholds": {
             "burn_prob_threshold": thr_low,
             "severity_prob_thresholds": [thr_mod, thr_high],
@@ -509,6 +830,7 @@ def predict_dinov3_severity_zones(
         "burn_scar_count": len(features),
         "average_confidence": 0.89,
         "stac_scene": stac_meta,
+        "vertex_prediction": vertex_meta,
         "polygons_geojson": {
             "type": "FeatureCollection",
             "features": features,

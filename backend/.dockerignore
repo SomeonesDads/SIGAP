@@ -12,4 +12,6 @@ venv/
 tests/
 weights/*.pth
 weights/*.pt
+ml/*.pt
+frontend/
 !weights/.gitkeep
