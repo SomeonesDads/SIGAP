@@ -13,6 +13,7 @@ import {
   type Place,
   type Severity,
 } from "@/lib/monitoring";
+import { fetchMonitoringHotspots } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { SigapLogo } from "@/components/layout/sigap-logo";
 import { NavMenu } from "@/components/layout/nav-menu";
@@ -30,12 +31,15 @@ const FireMap = dynamic(() => import("@/components/monitor/fire-map"), {
 
 const PRIORITY_COUNT = 3;
 const SIM_TICK_MS = 700;
+const LIVE_REFRESH_MS = 60_000;
 /** Push the focused marker below the map centre so its detail card stays visible. */
 const CARD_OFFSET_PX = 150;
 
 export function MonitorDashboard() {
   const mapRef = useRef<L.Map | null>(null);
   const desktopPanelRef = useRef<HTMLDivElement>(null);
+  const [hotspots, setHotspots] = useState<Hotspot[]>(SAMPLE_HOTSPOTS);
+  const [isLiveFeed, setIsLiveFeed] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hiddenSeverities, setHiddenSeverities] = useState<Set<Severity>>(new Set());
   const [simulation, setSimulation] = useState(false);
@@ -43,7 +47,23 @@ export function MonitorDashboard() {
   const [activeDroneId, setActiveDroneId] = useState("DRN-01");
   const [sheetCollapsed, setSheetCollapsed] = useState(false);
 
-  const ranked = useMemo(() => rankHotspots(SAMPLE_HOTSPOTS), []);
+  useEffect(() => {
+    let active = true;
+    const loadLive = async () => {
+      const data = await fetchMonitoringHotspots("Kalimantan", 15);
+      if (!active) return;
+      setHotspots(data.hotspots);
+      setIsLiveFeed(data.is_live);
+    };
+    loadLive();
+    const pollTimer = setInterval(loadLive, LIVE_REFRESH_MS);
+    return () => {
+      active = false;
+      clearInterval(pollTimer);
+    };
+  }, []);
+
+  const ranked = useMemo(() => rankHotspots(hotspots), [hotspots]);
   const rankById = useMemo(() => new Map(ranked.map((h, i) => [h.id, i + 1])), [ranked]);
   const visible = useMemo(
     () => ranked.filter((h) => !hiddenSeverities.has(h.severity)),
@@ -93,14 +113,8 @@ export function MonitorDashboard() {
   const toggleSimulation = (on: boolean) => {
     setSimulation(on);
     if (on) {
-      // Dispatch each drone to one of the top-priority hotspots
-      setDrones(
-        createDrones().map((d, i) => ({
-          ...d,
-          targetId: priorities[i]?.id ?? null,
-          mode: priorities[i] ? "Menuju target" : "Siaga",
-        }))
-      );
+      // Spawn each drone at the nearest Daops airbase to its assigned priority hotspot
+      setDrones(createDrones(priorities));
     } else {
       setDrones([]);
     }
@@ -109,10 +123,10 @@ export function MonitorDashboard() {
   useEffect(() => {
     if (!simulation) return;
     const timer = setInterval(() => {
-      setDrones((prev) => prev.map((d) => stepDrone(d, SAMPLE_HOTSPOTS)));
+      setDrones((prev) => prev.map((d) => stepDrone(d, hotspots)));
     }, SIM_TICK_MS);
     return () => clearInterval(timer);
-  }, [simulation]);
+  }, [simulation, hotspots]);
 
   const assignDrone = (droneId: string, hotspotId: string) =>
     setDrones((prev) =>
@@ -142,12 +156,18 @@ export function MonitorDashboard() {
       <header className="relative z-[1001] hidden h-[130px] shrink-0 items-center gap-10 bg-sigap-panel px-8 drop-shadow-[0_4px_2px_rgba(0,0,0,0.25)] xl:flex xl:gap-12 xl:px-[72px] 2xl:gap-[136px]">
         <SigapLogo />
         <LocationSearch
-          hotspots={SAMPLE_HOTSPOTS}
+          hotspots={hotspots}
           onSelectHotspot={(h) => focusHotspot(h)}
           onSelectPlace={focusPlace}
           className="min-w-0 max-w-[792px] flex-1"
         />
         <div className="ml-auto flex items-center gap-4">
+          {isLiveFeed && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-800 border border-emerald-500/30">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              LIVE FIRMS NRT
+            </span>
+          )}
           <SimulationToggle checked={simulation} onChange={toggleSimulation} />
           <NavMenu />
         </div>
@@ -163,7 +183,7 @@ export function MonitorDashboard() {
           <div className="flex items-center gap-2">
             <LocationSearch
               size="mobile"
-              hotspots={SAMPLE_HOTSPOTS}
+              hotspots={hotspots}
               onSelectHotspot={(h) => focusHotspot(h)}
               onSelectPlace={focusPlace}
               className="min-w-0 flex-1"

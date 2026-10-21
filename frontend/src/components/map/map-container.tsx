@@ -1,8 +1,13 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Compass, Flame, Layers, Loader2, MapPin, ZoomIn, ZoomOut } from "lucide-react";
+import { Compass, Loader2, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type {
+  RawHotspotPoint,
+  SegmentationResponse,
+  SpatialContextResponse,
+} from "@/lib/api";
 
 interface MapContainerProps {
   center?: [number, number];
@@ -12,6 +17,9 @@ interface MapContainerProps {
   activeLayers?: string[];
   interactive?: boolean;
   title?: string;
+  hotspots?: RawHotspotPoint[];
+  segmentation?: SegmentationResponse | null;
+  spatialContext?: SpatialContextResponse | null;
 }
 
 export function MapContainer({
@@ -19,9 +27,12 @@ export function MapContainer({
   zoom = 10,
   className,
   height = "h-[450px]",
-  activeLayers = ["Titik Panas (Hotspot)", "Segmentasi U-Net", "dNBR (Burn Severity)"],
+  activeLayers = ["Titik Panas (Hotspot)", "Segmentasi DINOv3 BurnSeg", "dNBR (Burn Severity)"],
   interactive = true,
   title,
+  hotspots = [],
+  segmentation = null,
+  spatialContext = null,
 }: MapContainerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -52,12 +63,11 @@ export function MapContainer({
     },
   };
 
-  // Mark client hydration complete
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  // Initialize Leaflet Map
+  // Initialize Leaflet Map instance once
   useEffect(() => {
     if (!isClient || !mapContainerRef.current) return;
 
@@ -67,7 +77,6 @@ export function MapContainer({
       try {
         const L = (await import("leaflet")).default;
 
-        // Clean up previous instance if exists on the container
         if (mapInstanceRef.current) {
           mapInstanceRef.current.remove();
           mapInstanceRef.current = null;
@@ -75,7 +84,6 @@ export function MapContainer({
 
         if (!mapContainerRef.current || !isMounted) return;
 
-        // Initialize Map
         const map = L.map(mapContainerRef.current, {
           center: center,
           zoom: zoom,
@@ -85,7 +93,6 @@ export function MapContainer({
 
         mapInstanceRef.current = map;
 
-        // Add initial tile layer
         const initialCfg = BASEMAP_TILES[basemap];
         const tileLayer = L.tileLayer(initialCfg.url, {
           maxZoom: initialCfg.maxZoom,
@@ -94,12 +101,10 @@ export function MapContainer({
 
         tileLayerRef.current = tileLayer;
 
-        // Add Google Maps attribution in bottom left
         L.control
-          .attribution({ position: "bottomleft", prefix: "© Google Maps | SIGAP" })
+          .attribution({ position: "bottomleft", prefix: "© Google Maps | NASA FIRMS | OSM | SIGAP" })
           .addTo(map);
 
-        // Initialize Layer Groups
         const groups: Record<string, any> = {
           hotspots: L.layerGroup(),
           segmentation: L.layerGroup(),
@@ -110,201 +115,7 @@ export function MapContainer({
 
         layersGroupRef.current = groups;
 
-        // --- LAYER 1: HOTSPOTS (FIRMS) ---
-        const sampleHotspots = [
-          { lat: center[0] + 0.015, lon: center[1] - 0.01, frp: 52.4, conf: "Tinggi (94%)", sat: "VIIRS SNPP" },
-          { lat: center[0] - 0.02, lon: center[1] + 0.025, frp: 38.1, conf: "Tinggi (89%)", sat: "VIIRS NOAA-20" },
-          { lat: center[0] + 0.005, lon: center[1] + 0.015, frp: 74.2, conf: "Kritis (98%)", sat: "MODIS Terra" },
-          { lat: center[0] - 0.012, lon: center[1] - 0.018, frp: 21.6, conf: "Nominal (72%)", sat: "VIIRS SNPP" },
-          { lat: center[0] + 0.028, lon: center[1] + 0.035, frp: 65.0, conf: "Tinggi (91%)", sat: "VIIRS NOAA-21" },
-        ];
-
-        sampleHotspots.forEach((hs, idx) => {
-          const marker = L.circleMarker([hs.lat, hs.lon], {
-            radius: Math.min(12, Math.max(6, hs.frp / 7)),
-            fillColor: hs.frp > 50 ? "#ef4444" : "#f59e0b",
-            color: "#ffffff",
-            weight: 1.5,
-            opacity: 0.9,
-            fillOpacity: 0.85,
-          });
-
-          marker.bindPopup(`
-            <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-              <div style="font-weight: 700; color: #b91c1c; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                🔥 Hotspot #${idx + 1}
-              </div>
-              <div><b>Radiasi Termal (FRP):</b> ${hs.frp} MW</div>
-              <div><b>Tingkat Keyakinan:</b> ${hs.conf}</div>
-              <div><b>Sensor Satelit:</b> ${hs.sat}</div>
-              <div><b>Koordinat:</b> ${hs.lat.toFixed(4)}, ${hs.lon.toFixed(4)}</div>
-            </div>
-          `);
-
-          marker.addTo(groups.hotspots);
-        });
-
-        // --- LAYER 2 & 3: DINOV3 BURNSEG 3-TIER COVERAGE (RED / ORANGE / YELLOW RADIUS) ---
-        // 1. Outer Yellow Zone — Low Severity / Outer Spread Radius (prob: 0.40 - 0.60, dNBR < 0.27, R ~ 1.85 km)
-        const yellowZoneCoords: [number, number][] = [
-          [center[0] + 0.022, center[1] - 0.018],
-          [center[0] + 0.030, center[1] + 0.008],
-          [center[0] + 0.018, center[1] + 0.032],
-          [center[0] - 0.008, center[1] + 0.035],
-          [center[0] - 0.026, center[1] + 0.014],
-          [center[0] - 0.024, center[1] - 0.016],
-          [center[0] - 0.004, center[1] - 0.028],
-        ];
-
-        const yellowPolygon = L.polygon(yellowZoneCoords, {
-          color: "#eab308",
-          weight: 2,
-          fillColor: "#facc15",
-          fillOpacity: 0.28,
-          dashArray: "5, 5",
-        });
-
-        yellowPolygon.bindPopup(`
-          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-            <div style="font-weight: 700; color: #a16207; margin-bottom: 4px;">
-              🟨 Zona Kuning — Keparahan Rendah (Outer Radius)
-            </div>
-            <div><b>Model:</b> DINOv3 BurnSeg (vit_large_patch16_dinov3.sat493m)</div>
-            <div><b>Radius Sebaran Luar:</b> 1.85 km (1,850 m)</div>
-            <div><b>Luas Cakupan Kuning:</b> 70.1 Hektare</div>
-            <div><b>Threshold:</b> Prob 0.40–0.60 | dNBR &lt; 0.27</div>
-            <div><b>Status:</b> Zona Penyangga / Peringatan Dini</div>
-          </div>
-        `);
-        yellowPolygon.addTo(groups.segmentation);
-
-        // 2. Middle Orange Zone — Moderate Severity / Active Fire Spread (prob: 0.60 - 0.80, dNBR 0.27-0.44, R ~ 1.25 km)
-        const orangeZoneCoords: [number, number][] = [
-          [center[0] + 0.015, center[1] - 0.012],
-          [center[0] + 0.021, center[1] + 0.006],
-          [center[0] + 0.012, center[1] + 0.022],
-          [center[0] - 0.006, center[1] + 0.023],
-          [center[0] - 0.017, center[1] + 0.009],
-          [center[0] - 0.015, center[1] - 0.011],
-          [center[0] - 0.002, center[1] - 0.019],
-        ];
-
-        const orangePolygon = L.polygon(orangeZoneCoords, {
-          color: "#ea580c",
-          weight: 2,
-          fillColor: "#f97316",
-          fillOpacity: 0.42,
-        });
-
-        orangePolygon.bindPopup(`
-          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-            <div style="font-weight: 700; color: #c2410c; margin-bottom: 4px;">
-              🟧 Zona Oranye — Keparahan Sedang (Active Spread)
-            </div>
-            <div><b>Model:</b> DINOv3 BurnSeg (vit_large_patch16_dinov3.sat493m)</div>
-            <div><b>Radius Rambat Aktif:</b> 1.25 km (1,250 m)</div>
-            <div><b>Luas Cakupan Oranye:</b> 52.8 Hektare</div>
-            <div><b>Threshold:</b> Prob 0.60–0.80 | dNBR 0.27–0.44</div>
-            <div><b>Status:</b> Penyekatan Jalur Api Prioritas</div>
-          </div>
-        `);
-        orangePolygon.addTo(groups.segmentation);
-        orangePolygon.addTo(groups.dnbr);
-
-        // 3. Inner Red Zone — High Severity / Core Burn Epicenter (prob >= 0.80, dNBR >= 0.44, R ~ 0.70 km)
-        const redZoneCoords: [number, number][] = [
-          [center[0] + 0.009, center[1] - 0.006],
-          [center[0] + 0.013, center[1] + 0.004],
-          [center[0] + 0.006, center[1] + 0.013],
-          [center[0] - 0.004, center[1] + 0.012],
-          [center[0] - 0.009, center[1] + 0.003],
-          [center[0] - 0.007, center[1] - 0.006],
-        ];
-
-        const redPolygon = L.polygon(redZoneCoords, {
-          color: "#dc2626",
-          weight: 2.5,
-          fillColor: "#ef4444",
-          fillOpacity: 0.60,
-        });
-
-        redPolygon.bindPopup(`
-          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-            <div style="font-weight: 700; color: #b91c1c; margin-bottom: 4px;">
-              🟥 Zona Merah — Keparahan Tinggi (Inti Episentrum)
-            </div>
-            <div><b>Model:</b> DINOv3 BurnSeg (vit_large_patch16_dinov3.sat493m)</div>
-            <div><b>Radius Inti Api:</b> 0.70 km (700 m)</div>
-            <div><b>Luas Cakupan Merah:</b> 34.4 Hektare</div>
-            <div><b>Threshold:</b> Prob &ge; 0.80 | dNBR &ge; 0.44</div>
-            <div><b>Test Precision / F1:</b> 77.3% / 0.665</div>
-            <div><b>Status:</b> Intervensi Pemadaman Segera (KRITIS)</div>
-          </div>
-        `);
-        redPolygon.addTo(groups.segmentation);
-        redPolygon.addTo(groups.dnbr);
-
-
-        // --- LAYER 4: LAHAN GAMBUT (PEATLAND) ---
-        const peatlandCoords: [number, number][] = [
-          [center[0] + 0.05, center[1] - 0.06],
-          [center[0] + 0.06, center[1] + 0.06],
-          [center[0] - 0.06, center[1] + 0.06],
-          [center[0] - 0.05, center[1] - 0.06],
-        ];
-
-        const peatPolygon = L.polygon(peatlandCoords, {
-          color: "#10b981",
-          weight: 2,
-          fillColor: "#059669",
-          fillOpacity: 0.15,
-          dashArray: "6, 6",
-        });
-
-        peatPolygon.bindPopup(`
-          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-            <div style="font-weight: 700; color: #047857; margin-bottom: 4px;">
-              🌲 Batas Lahan Gambut (BBSDLP)
-            </div>
-            <div><b>Kedalaman Gambut:</b> Gambut Sangat Dalam (&gt; 3 meter)</div>
-            <div><b>Faktor Risiko:</b> Potensi kebakaran bawah permukaan (smoldering)</div>
-          </div>
-        `);
-        peatPolygon.addTo(groups.peatland);
-
-        // --- LAYER 5: PERMUKIMAN & BUFFER ---
-        const settlementPoint: [number, number] = [center[0] - 0.035, center[1] - 0.025];
-        const settlementMarker = L.circleMarker(settlementPoint, {
-          radius: 8,
-          fillColor: "#06b6d4",
-          color: "#ffffff",
-          weight: 2,
-          fillOpacity: 0.9,
-        });
-
-        const settlementBuffer = L.circle(settlementPoint, {
-          radius: 2000, // 2 km buffer
-          color: "#0891b2",
-          weight: 1.5,
-          fillColor: "#22d3ee",
-          fillOpacity: 0.12,
-        });
-
-        settlementMarker.bindPopup(`
-          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-            <div style="font-weight: 700; color: #0e7490; margin-bottom: 4px;">
-              🏘️ Permukiman Warga (Buffer 2.0 km)
-            </div>
-            <div><b>Estimasi Populasi:</b> 1,450 Jiwa</div>
-            <div><b>Jarak ke Titik Api:</b> 800 meter</div>
-            <div><b>Status:</b> Siaga Evakuasi</div>
-          </div>
-        `);
-
-        settlementMarker.addTo(groups.settlement);
-        settlementBuffer.addTo(groups.settlement);
-
-        // Attach default active layers
+        // Attach active layer groups
         Object.entries(groups).forEach(([key, group]) => {
           const isMatching = activeLayers.some((al) => {
             const lower = al.toLowerCase();
@@ -337,7 +148,174 @@ export function MapContainer({
         mapInstanceRef.current = null;
       }
     };
-  }, [isClient, center[0], center[1], zoom]);
+  }, [isClient]);
+
+  // Fly to new center/zoom when selected region changes
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    mapInstanceRef.current.flyTo(center, zoom, { duration: 0.9 });
+  }, [center[0], center[1], zoom]);
+
+  // Populate & update spatial layers dynamically when live data arrives
+  useEffect(() => {
+    if (!isClient || !mapInstanceRef.current || !layersGroupRef.current) return;
+
+    async function renderLiveLayers() {
+      const L = (await import("leaflet")).default;
+      const groups = layersGroupRef.current;
+      if (!groups || !groups.hotspots) return;
+
+      groups.hotspots.clearLayers();
+      groups.segmentation.clearLayers();
+      groups.dnbr.clearLayers();
+      groups.peatland.clearLayers();
+      groups.settlement.clearLayers();
+
+      // 1. LIVE FIRMS HOTSPOTS LAYER
+      hotspots.forEach((hs, idx) => {
+        const frp = Number(hs.frp ?? 15.0);
+        const marker = L.circleMarker([hs.latitude, hs.longitude], {
+          radius: Math.min(13, Math.max(5.5, frp / 6.5)),
+          fillColor: frp >= 45 ? "#ef4444" : frp >= 20 ? "#f97316" : "#f59e0b",
+          color: "#ffffff",
+          weight: 1.5,
+          opacity: 0.95,
+          fillOpacity: 0.88,
+        });
+
+        const timeFormatted = hs.acq_time && hs.acq_time.length >= 4
+          ? `${hs.acq_time.slice(0, 2)}:${hs.acq_time.slice(2, 4)} UTC`
+          : hs.acq_time;
+
+        marker.bindPopup(`
+          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+            <div style="font-weight: 700; color: #b91c1c; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+              🔥 Live FIRMS Hotspot #${idx + 1}
+            </div>
+            <div><b>Radiasi Termal (FRP):</b> ${frp.toFixed(1)} MW</div>
+            <div><b>Keyakinan:</b> ${hs.confidence.toUpperCase()}</div>
+            <div><b>Waktu Akuisisi:</b> ${hs.acq_date} ${timeFormatted}</div>
+            <div><b>Sensor Satelit:</b> ${hs.satellite}</div>
+            ${hs.brightness ? `<div><b>Suhu Kecerahan:</b> ${hs.brightness.toFixed(1)} K</div>` : ""}
+            <div><b>Koordinat:</b> ${hs.latitude.toFixed(4)}°, ${hs.longitude.toFixed(4)}°</div>
+          </div>
+        `);
+
+        marker.addTo(groups.hotspots);
+      });
+
+      // 2. DINOV3 BURNSEG & dNBR DYNAMIC GEOJSON POLYGONS
+      if (segmentation?.geojson?.features) {
+        segmentation.geojson.features.forEach((feat) => {
+          const props = feat.properties || {};
+          const tier = String(props.severity_tier || "LOW").toUpperCase();
+          const coordsRing = feat.geometry?.coordinates?.[0] || [];
+          const latLngs: [number, number][] = coordsRing.map((pt: number[]) => [pt[1], pt[0]]);
+          if (latLngs.length < 3) return;
+
+          const style =
+            tier === "HIGH"
+              ? { color: "#dc2626", weight: 2.5, fillColor: "#ef4444", fillOpacity: 0.56 }
+              : tier === "MODERATE"
+              ? { color: "#ea580c", weight: 2, fillColor: "#f97316", fillOpacity: 0.40 }
+              : { color: "#eab308", weight: 2, fillColor: "#facc15", fillOpacity: 0.26, dashArray: "5, 5" };
+
+          const poly = L.polygon(latLngs, style);
+          const badge = tier === "HIGH" ? "🟥" : tier === "MODERATE" ? "🟧" : "🟨";
+
+          poly.bindPopup(`
+            <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+              <div style="font-weight: 700; color: ${style.color}; margin-bottom: 4px;">
+                ${badge} ${props.label || tier}
+              </div>
+              <div><b>Model:</b> ${segmentation.model}</div>
+              <div><b>Radius Cakupan:</b> ${props.radius_km} km (${props.radius_m} m)</div>
+              <div><b>Luas Terdampak:</b> ${props.area_ha} Hektare</div>
+              <div><b>Threshold:</b> Prob ${props.prob_range} | dNBR ${props.dnbr_threshold}</div>
+              <div><b>Keyakinan Rata-rata:</b> ${Math.round(Number(props.mean_confidence || 0.85) * 100)}%</div>
+            </div>
+          `);
+
+          poly.addTo(groups.segmentation);
+          if (tier === "HIGH" || tier === "MODERATE") {
+            const dnbrClone = L.polygon(latLngs, style);
+            dnbrClone.bindPopup(poly.getPopup()!);
+            dnbrClone.addTo(groups.dnbr);
+          }
+        });
+      }
+
+      // 3. LIVE PEATLAND / WETLAND POLYGONS (OSM Overpass / KHG)
+      if (spatialContext?.peatland_polygons) {
+        spatialContext.peatland_polygons.forEach((peat) => {
+          const ring = peat.coordinates?.[0] || [];
+          const latLngs: [number, number][] = ring.map((pt: number[]) => [pt[1], pt[0]]);
+          if (latLngs.length < 3) return;
+
+          const peatPoly = L.polygon(latLngs, {
+            color: "#10b981",
+            weight: 2,
+            fillColor: "#059669",
+            fillOpacity: 0.16,
+            dashArray: "6, 6",
+          });
+
+          peatPoly.bindPopup(`
+            <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+              <div style="font-weight: 700; color: #047857; margin-bottom: 4px;">
+                🌲 ${peat.name}
+              </div>
+              <div><b>Karakteristik Tanah:</b> ${peat.natural_type}</div>
+              <div><b>Wilayah:</b> ${spatialContext.district}</div>
+              <div><b>Sumber Data:</b> ${peat.source}</div>
+            </div>
+          `);
+          peatPoly.addTo(groups.peatland);
+        });
+      }
+
+      // 4. LIVE SETTLEMENTS & SAFETY BUFFERS (OpenStreetMap Overpass)
+      if (spatialContext?.settlements) {
+        spatialContext.settlements.forEach((st) => {
+          const sPoint: [number, number] = [st.lat, st.lon];
+          const sMarker = L.circleMarker(sPoint, {
+            radius: 7.5,
+            fillColor: "#06b6d4",
+            color: "#ffffff",
+            weight: 2,
+            fillOpacity: 0.92,
+          });
+
+          const sBuffer = L.circle(sPoint, {
+            radius: st.buffer_m || 2000,
+            color: "#0891b2",
+            weight: 1.5,
+            fillColor: "#22d3ee",
+            fillOpacity: 0.11,
+          });
+
+          const popupHtml = `
+            <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+              <div style="font-weight: 700; color: #0e7490; margin-bottom: 4px;">
+                🏘️ ${st.name} (${st.place_type})
+              </div>
+              <div><b>Jarak ke Episentrum Api:</b> ${st.distance_km} km</div>
+              <div><b>Radius Penyangga:</b> ${(st.buffer_m / 1000).toFixed(1)} km</div>
+              <div><b>Estimasi Populasi:</b> ${st.population}</div>
+              <div><b>Sumber:</b> ${st.source}</div>
+            </div>
+          `;
+
+          sMarker.bindPopup(popupHtml);
+          sBuffer.bindPopup(popupHtml);
+          sMarker.addTo(groups.settlement);
+          sBuffer.addTo(groups.settlement);
+        });
+      }
+    }
+
+    renderLiveLayers();
+  }, [isClient, hotspots, segmentation, spatialContext]);
 
   // Handle Layer Toggle dynamically
   useEffect(() => {

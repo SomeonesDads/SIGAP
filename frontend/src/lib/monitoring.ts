@@ -50,10 +50,16 @@ export interface Hotspot {
   settlementKm: number;
   status: string;
   location: string;
+  district?: string;
   fireType: string;
   soil: string;
   lastCondition: string;
   satellite: string;
+  hotspotCount?: number;
+  totalFrp?: number;
+  acqDate?: string;
+  acqTime?: string;
+  isLive?: boolean;
 }
 
 export const SAMPLE_HOTSPOTS: Hotspot[] = [
@@ -254,6 +260,7 @@ export interface Drone {
   lat: number;
   lon: number;
   base: [number, number];
+  baseName?: string;
   targetId: string | null;
   mode: DroneMode;
   /** Battery percentage (0-100). */
@@ -263,16 +270,56 @@ export interface Drone {
   extinguisherCapacityL: number;
 }
 
-export function createDrones(): Drone[] {
+const DAOPS_BASES: Array<{ name: string; coords: [number, number] }> = [
+  { name: "Lanud Tjilik Riwut (Palangka Raya)", coords: [-2.225, 113.942] },
+  { name: "Lanud Iskandar (Pangkalan Bun)", coords: [-2.705, 111.673] },
+  { name: "Posko Daops Sampit (Kotim)", coords: [-2.501, 112.975] },
+  { name: "Posko Daops Ketapang (Kalbar)", coords: [-1.816, 109.963] },
+  { name: "Lanud Syamsudin Noor (Banjarbaru)", coords: [-3.442, 114.763] },
+  { name: "Lanud Sepinggan (Balikpapan)", coords: [-1.268, 116.894] },
+  { name: "Posko Daops Muara Teweh (Barut)", coords: [-0.957, 114.895] },
+];
+
+function findNearestBase(
+  lat: number,
+  lon: number,
+  excludeCoords?: [number, number]
+): { name: string; coords: [number, number] } {
+  const candidates = excludeCoords
+    ? DAOPS_BASES.filter(
+        (b) =>
+          Math.hypot(b.coords[0] - excludeCoords[0], b.coords[1] - excludeCoords[1]) > 0.05
+      )
+    : DAOPS_BASES;
+  const pool = candidates.length > 0 ? candidates : DAOPS_BASES;
+  return pool.reduce((best, b) => {
+    const dBest = Math.hypot(best.coords[0] - lat, best.coords[1] - lon);
+    const dCur = Math.hypot(b.coords[0] - lat, b.coords[1] - lon);
+    return dCur < dBest ? b : best;
+  }, pool[0]);
+}
+
+export function createDrones(priorityHotspots?: Hotspot[]): Drone[] {
+  const h1 = priorityHotspots?.[0];
+  const h2 = priorityHotspots?.[1] ?? priorityHotspots?.[0];
+
+  const base1 = h1
+    ? findNearestBase(h1.lat, h1.lon)
+    : DAOPS_BASES[0];
+  const base2 = h2
+    ? findNearestBase(h2.lat, h2.lon, base1.coords)
+    : DAOPS_BASES[1];
+
   return [
     {
       id: "DRN-01",
       name: "Drone A",
-      lat: -2.21,
-      lon: 113.92,
-      base: [-2.21, 113.92],
-      targetId: null,
-      mode: "Siaga",
+      lat: base1.coords[0],
+      lon: base1.coords[1],
+      base: base1.coords,
+      baseName: base1.name,
+      targetId: h1?.id ?? null,
+      mode: h1 ? "Menuju target" : "Siaga",
       battery: 100,
       extinguisherL: 40,
       extinguisherCapacityL: 40,
@@ -280,11 +327,12 @@ export function createDrones(): Drone[] {
     {
       id: "DRN-02",
       name: "Drone B",
-      lat: -1.27,
-      lon: 116.83,
-      base: [-1.27, 116.83],
-      targetId: null,
-      mode: "Siaga",
+      lat: base2.coords[0],
+      lon: base2.coords[1],
+      base: base2.coords,
+      baseName: base2.name,
+      targetId: h2?.id ?? null,
+      mode: h2 ? "Menuju target" : "Siaga",
       battery: 100,
       extinguisherL: 40,
       extinguisherCapacityL: 40,
@@ -292,30 +340,30 @@ export function createDrones(): Drone[] {
   ];
 }
 
-const STEP_DEG = 0.06;
+const STEP_DEG = 0.055;
 
-function moveToward(d: Drone, lat: number, lon: number): { lat: number; lon: number; arrived: boolean } {
+function moveToward(d: Drone, lat: number, lon: number, stepDeg = STEP_DEG): { lat: number; lon: number; arrived: boolean } {
   const dLat = lat - d.lat;
   const dLon = lon - d.lon;
   const dist = Math.hypot(dLat, dLon);
-  if (dist <= STEP_DEG) return { lat, lon, arrived: true };
-  return { lat: d.lat + (dLat / dist) * STEP_DEG, lon: d.lon + (dLon / dist) * STEP_DEG, arrived: false };
+  if (dist <= stepDeg) return { lat, lon, arrived: true };
+  return { lat: d.lat + (dLat / dist) * stepDeg, lon: d.lon + (dLon / dist) * stepDeg, arrived: false };
 }
 
 /**
- * Advance the drone simulation by one tick: each drone flies to its
- * assigned priority hotspot, discharges extinguisher, then returns to
- * base to recharge when battery or payload runs low.
+ * Advance the drone simulation by one tick: each drone flies from its nearest
+ * Daops airbase to its assigned live priority hotspot, discharges payload
+ * proportional to cluster FRP & peatland intensity, then returns to base.
  */
 export function stepDrone(d: Drone, hotspots: Hotspot[]): Drone {
   const target = hotspots.find((h) => h.id === d.targetId);
 
   if (d.mode === "Kembali ke base") {
-    const next = moveToward(d, d.base[0], d.base[1]);
+    const next = moveToward(d, d.base[0], d.base[1], STEP_DEG * 1.15);
     if (next.arrived) {
       return { ...d, ...next, mode: "Siaga", battery: 100, extinguisherL: d.extinguisherCapacityL };
     }
-    return { ...d, ...next, battery: Math.max(0, d.battery - 0.4) };
+    return { ...d, ...next, battery: Math.round(Math.max(0, d.battery - 0.35) * 10) / 10 };
   }
 
   if (!target) return d;
@@ -324,20 +372,28 @@ export function stepDrone(d: Drone, hotspots: Hotspot[]): Drone {
     return { ...d, mode: "Kembali ke base" };
   }
 
+  // Scale discharge and hover power draw dynamically from live cluster FRP and peatland status
+  const frpFactor = Math.min(2.0, Math.max(0.8, (target.totalFrp ?? 30) / 45));
+  const peatMultiplier = target.peatland ? 1.25 : 1.0;
+
   if (d.mode === "Memadamkan") {
+    const dropRate = Math.round(1.8 * frpFactor * peatMultiplier * 10) / 10;
+    const hoverDrain = Math.round(0.55 * peatMultiplier * 10) / 10;
     return {
       ...d,
-      battery: Math.max(0, d.battery - 0.6),
-      extinguisherL: Math.max(0, d.extinguisherL - 2),
+      battery: Math.round(Math.max(0, d.battery - hoverDrain) * 10) / 10,
+      extinguisherL: Math.round(Math.max(0, d.extinguisherL - dropRate) * 10) / 10,
     };
   }
 
-  const next = moveToward(d, target.lat, target.lon);
+  const urgencyStep = STEP_DEG * (target.riskScore >= 85 ? 1.2 : 1.0);
+  const next = moveToward(d, target.lat, target.lon, urgencyStep);
   return {
     ...d,
     lat: next.lat,
     lon: next.lon,
     mode: next.arrived ? "Memadamkan" : "Menuju target",
-    battery: Math.max(0, d.battery - 0.4),
+    battery: Math.round(Math.max(0, d.battery - 0.4) * 10) / 10,
   };
 }
+

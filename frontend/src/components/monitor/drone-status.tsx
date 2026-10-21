@@ -64,6 +64,7 @@ export function DroneStatus({
       </div>
 
       <div className="mt-4 flex flex-col gap-4">
+        {drone.baseName && <Field label="Base" value={drone.baseName} />}
         <Field label="GPS coord" value={`${drone.lat.toFixed(4)}, ${drone.lon.toFixed(4)}`} />
         <Field label="Mode" value={drone.targetId && drone.mode !== "Siaga" ? `${drone.mode} (${drone.targetId})` : drone.mode} />
         <Field label="Battery" value={`${Math.round(drone.battery)}%`} />
