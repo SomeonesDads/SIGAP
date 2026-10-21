@@ -71,7 +71,8 @@ export default function DashboardPage() {
             Dashboard — Wildfire Overview
           </h1>
           <p className="text-sm text-slate-400 mt-1">
-            Ringkasan pemantauan terpadu anomali termal, estimasi luasan area terbakar, dan respon prioritas lapangan.
+            Ringkasan pemantauan terpadu anomali termal, estimasi luasan area
+            terbakar, dan respon prioritas lapangan.
           </p>
         </div>
 
@@ -156,7 +157,11 @@ export default function DashboardPage() {
           <MapContainer
             height="h-[420px]"
             title="Overview Sebaran Hotspot & Klaster Karhutla"
-            activeLayers={["Hotspots FIRMS", "Kanal Gambut", "Buffer Permukiman"]}
+            activeLayers={[
+              "Hotspots FIRMS",
+              "Kanal Gambut",
+              "Buffer Permukiman",
+            ]}
           />
         </div>
 
@@ -188,7 +193,8 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1">
-                Lahan gambut dalam (>3m) dengan 14 titik panas terpusat, berjarak 800 meter dari permukiman warga.
+                Lahan gambut dalam (&gt;3m) dengan 14 titik panas terpusat,
+                berjarak 800 meter dari permukiman warga.
               </p>
               <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Rekomendasi: Water bombing & patroli darat</span>
@@ -211,7 +217,8 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1">
-                Indikasi kebakaran meluas ke area konsesi hutan tanaman industri. Citra dNBR menunjukkan kerusakan vegetasi sedang.
+                Indikasi kebakaran meluas ke area konsesi hutan tanaman
+                industri. Citra dNBR menunjukkan kerusakan vegetasi sedang.
               </p>
               <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
                 <span>Rekomendasi: Pembuatan sekat bakar</span>
@@ -226,7 +233,11 @@ export default function DashboardPage() {
 
             <div className="pt-1">
               <Link href="/priority" className="w-full">
-                <Button variant="secondary" size="sm" className="w-full text-xs">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full text-xs"
+                >
                   Buka Matriks Penilaian Prioritas
                 </Button>
               </Link>
@@ -268,13 +279,18 @@ export default function DashboardPage() {
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
               {recentCases.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-800/40 transition-colors">
+                <tr
+                  key={c.id}
+                  className="hover:bg-slate-800/40 transition-colors"
+                >
                   <td className="py-3 px-4 font-mono font-medium text-amber-400">
                     {c.id}
                   </td>
                   <td className="py-3 px-4">
                     <div className="font-medium text-slate-200">{c.region}</div>
-                    <div className="text-[11px] text-slate-500">{c.examiner}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {c.examiner}
+                    </div>
                   </td>
                   <td className="py-3 px-4 text-slate-400">{c.date}</td>
                   <td className="py-3 px-4 font-semibold text-slate-200">
@@ -286,8 +302,8 @@ export default function DashboardPage() {
                         c.priority === "Kritis"
                           ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
                           : c.priority === "Tinggi"
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                       }`}
                     >
                       {c.priority}
@@ -299,8 +315,8 @@ export default function DashboardPage() {
                         c.statusType === "warning"
                           ? "text-amber-400 bg-amber-500/10"
                           : c.statusType === "success"
-                          ? "text-emerald-400 bg-emerald-500/10"
-                          : "text-slate-400 bg-slate-800"
+                            ? "text-emerald-400 bg-emerald-500/10"
+                            : "text-slate-400 bg-slate-800"
                       }`}
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
