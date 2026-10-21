@@ -53,6 +53,31 @@ class FIRMSClient:
         "LANDSAT_NRT",
     }
 
+    # Standard bounding boxes [west, south, east, north] for Indonesian fire-prone regions
+    REGION_BBOXES: Dict[str, List[float]] = {
+        "indonesia": [95.0, -11.0, 141.0, 6.0],
+        "kalimantan": [108.5, -4.5, 119.0, 4.5],
+        "kalimantan tengah": [110.7, -3.5, 115.8, 0.8],
+        "kalteng": [110.7, -3.5, 115.8, 0.8],
+        "kalimantan timur": [113.8, -2.5, 119.0, 2.6],
+        "kaltim": [113.8, -2.5, 119.0, 2.6],
+        "kalimantan barat": [108.5, -3.1, 114.2, 2.1],
+        "kalbar": [108.5, -3.1, 114.2, 2.1],
+        "kalimantan selatan": [114.3, -4.3, 116.6, -1.3],
+        "kalsel": [114.3, -4.3, 116.6, -1.3],
+        "pulang pisau": [113.5, -3.4, 114.6, -1.8],
+        "sebangau": [113.3, -3.2, 114.2, -2.1],
+        "kapuas": [113.8, -3.4, 114.9, -0.8],
+        "barito utara": [114.4, -1.6, 115.8, 0.1],
+        "ketapang": [109.7, -3.1, 111.3, -0.5],
+        "riau": [100.0, -1.1, 103.8, 2.5],
+        "sumatera selatan": [102.0, -4.9, 106.2, -1.6],
+        "sumsel": [102.0, -4.9, 106.2, -1.6],
+        "ogan komering ilir": [104.3, -4.2, 106.1, -2.5],
+        "oki": [104.3, -4.2, 106.1, -2.5],
+        "jambi": [101.1, -2.8, 104.5, -0.7],
+    }
+
     def __init__(
         self,
         api_key: str,
@@ -73,13 +98,35 @@ class FIRMSClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
+    @classmethod
+    def resolve_region(
+        cls, region: Union[str, Dict[str, float], List[float]]
+    ) -> Union[str, Dict[str, float], List[float]]:
+        """Resolve named Indonesian provinces/districts or comma-separated bbox strings."""
+        if isinstance(region, str):
+            cleaned = region.strip()
+            if "," in cleaned:
+                try:
+                    parts = [float(p.strip()) for p in cleaned.split(",")]
+                    if len(parts) == 4:
+                        return parts
+                except ValueError:
+                    pass
+            lower = cleaned.lower()
+            if lower in cls.REGION_BBOXES:
+                return cls.REGION_BBOXES[lower]
+            for name, bbox in cls.REGION_BBOXES.items():
+                if name in lower:
+                    return bbox
+        return region
+
     async def get_hotspots(
         self,
         region: Union[str, Dict[str, float], List[float]],
-        date_start: Union[str, date, datetime],
+        date_start: Optional[Union[str, date, datetime]] = None,
         date_end: Optional[Union[str, date, datetime]] = None,
         source: str = "VIIRS_SNPP_NRT",
-        day_range: int = 1,
+        day_range: int = 2,
     ) -> List[Dict[str, Any]]:
         """Retrieve active fire hotspots for a given region and time range.
 
@@ -87,11 +134,11 @@ class FIRMSClient:
             region: Geolocation filter:
                 - Dict with keys {'west', 'south', 'east', 'north'} or {'min_lon', 'min_lat', 'max_lon', 'max_lat'}
                 - List/Tuple of 4 floats: [west, south, east, north]
-                - String country code (e.g., 'IDN' for Indonesia)
-            date_start: Start date as 'YYYY-MM-DD' or date/datetime object.
+                - String country code (e.g., 'IDN' for Indonesia) or Indonesian province/district name
+            date_start: Optional start date as 'YYYY-MM-DD' or date/datetime object. If None, queries latest NRT window.
             date_end: Optional end date. If provided, day_range is calculated.
             source: Satellite sensor product. Default 'VIIRS_SNPP_NRT' (375m resolution).
-            day_range: Number of days from date_start (1 to 10 for standard FIRMS API).
+            day_range: Number of days (1 to 10 for standard FIRMS API).
 
         Returns:
             List of parsed hotspot dictionaries containing lat, lon, frp, confidence, etc.
@@ -108,57 +155,72 @@ class FIRMSClient:
                 self.SUPPORTED_SOURCES,
             )
 
-        # Format date string (YYYY-MM-DD)
-        if isinstance(date_start, (datetime, date)):
-            date_str = date_start.strftime("%Y-%m-%d")
-        else:
-            date_str = str(date_start).strip()
+        resolved_region = self.resolve_region(region)
 
-        # Calculate day range if date_end is given
-        if date_end is not None:
-            if isinstance(date_end, str):
-                d_end = datetime.strptime(date_end, "%Y-%m-%d").date()
-            elif isinstance(date_end, datetime):
-                d_end = date_end.date()
+        # Format date string (YYYY-MM-DD) if provided
+        date_str: Optional[str] = None
+        if date_start is not None:
+            if isinstance(date_start, (datetime, date)):
+                date_str = date_start.strftime("%Y-%m-%d")
             else:
-                d_end = date_end
+                s = str(date_start).strip()
+                if s and s.lower() != "none":
+                    date_str = s
 
-            if isinstance(date_start, str):
-                d_start = datetime.strptime(date_str, "%Y-%m-%d").date()
-            elif isinstance(date_start, datetime):
-                d_start = date_start.date()
-            else:
-                d_start = date_start
+        # Calculate day range if both date_start and date_end are given
+        if date_end is not None and date_str is not None:
+            try:
+                if isinstance(date_end, str):
+                    d_end = datetime.strptime(date_end.strip(), "%Y-%m-%d").date()
+                elif isinstance(date_end, datetime):
+                    d_end = date_end.date()
+                else:
+                    d_end = date_end
 
-            delta = (d_end - d_start).days + 1
-            day_range = max(1, min(delta, 10))
+                if isinstance(date_start, str):
+                    d_start = datetime.strptime(date_str, "%Y-%m-%d").date()
+                elif isinstance(date_start, datetime):
+                    d_start = date_start.date()
+                else:
+                    d_start = date_start
+
+                delta = (d_end - d_start).days + 1
+                day_range = max(1, min(delta, 10))
+            except ValueError:
+                pass
+
+        day_range = max(1, min(int(day_range), 10))
+        date_suffix = f"/{date_str}" if date_str else ""
 
         # Build endpoint URL depending on region type
-        if isinstance(region, str):
-            # Country query: /api/country/csv/[MAP_KEY]/[SOURCE]/[COUNTRY]/[DAY_RANGE]/[DATE]
-            endpoint = f"{self.base_url}/api/country/csv/{self.api_key}/{source}/{region.upper()}/{day_range}/{date_str}"
-        elif isinstance(region, (list, tuple)) and len(region) == 4:
-            # Bounding box coordinates: [west, south, east, north]
-            coords = f"{region[0]},{region[1]},{region[2]},{region[3]}"
-            endpoint = f"{self.base_url}/api/area/csv/{self.api_key}/{source}/{coords}/{day_range}/{date_str}"
-        elif isinstance(region, dict):
-            # Bounding box dictionary
-            west = region.get("west", region.get("min_lon"))
-            south = region.get("south", region.get("min_lat"))
-            east = region.get("east", region.get("max_lon"))
-            north = region.get("north", region.get("max_lat"))
+        if isinstance(resolved_region, str):
+            country_code = resolved_region.upper() if len(resolved_region) == 3 else "IDN"
+            endpoint_base = f"{self.base_url}/api/country/csv/{self.api_key}/{source}/{country_code}/{day_range}"
+        elif isinstance(resolved_region, (list, tuple)) and len(resolved_region) == 4:
+            coords = f"{resolved_region[0]},{resolved_region[1]},{resolved_region[2]},{resolved_region[3]}"
+            endpoint_base = f"{self.base_url}/api/area/csv/{self.api_key}/{source}/{coords}/{day_range}"
+        elif isinstance(resolved_region, dict):
+            west = resolved_region.get("west", resolved_region.get("min_lon"))
+            south = resolved_region.get("south", resolved_region.get("min_lat"))
+            east = resolved_region.get("east", resolved_region.get("max_lon"))
+            north = resolved_region.get("north", resolved_region.get("max_lat"))
             if None in (west, south, east, north):
                 raise ValueError("Bounding box dict must contain west/south/east/north or min_lon/min_lat/max_lon/max_lat")
             coords = f"{west},{south},{east},{north}"
-            endpoint = f"{self.base_url}/api/area/csv/{self.api_key}/{source}/{coords}/{day_range}/{date_str}"
+            endpoint_base = f"{self.base_url}/api/area/csv/{self.api_key}/{source}/{coords}/{day_range}"
         else:
             raise ValueError(f"Invalid region format: {region}")
 
-        logger.info("Fetching FIRMS hotspots from: %s (source=%s, date=%s)", endpoint, source, date_str)
+        endpoint = f"{endpoint_base}{date_suffix}"
+        logger.info("Fetching FIRMS hotspots from: %s (source=%s, date=%s)", endpoint, source, date_str or "latest-NRT")
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.get(endpoint)
+                # If a specific date was requested but returned empty or invalid date, retry latest NRT window
+                if date_suffix and (response.status_code == 400 or not self._parse_csv_response(response.text)):
+                    logger.info("Retrying FIRMS query against latest NRT window without date suffix.")
+                    response = await client.get(endpoint_base)
             except httpx.RequestError as exc:
                 raise FIRMSAPIError(f"HTTP request to FIRMS API failed: {exc}") from exc
 

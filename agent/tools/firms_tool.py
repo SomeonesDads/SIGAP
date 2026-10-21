@@ -46,7 +46,16 @@ def fetch_hotspots(
             - hotspots (list[dict]): List of individual hotspot records with coordinates,
               confidence, fire radiative power (frp), and acquisition timestamp.
     """
-    api_key = os.getenv("FIRMS_MAP_KEY", "").strip()
+    api_key = (
+        os.getenv("NASA_FIRMS_API_KEY", "").strip()
+        or os.getenv("FIRMS_MAP_KEY", "").strip()
+    )
+    if not api_key:
+        try:
+            from backend.config import get_settings
+            api_key = get_settings().NASA_FIRMS_API_KEY.strip()
+        except Exception:
+            pass
 
     # If FIRMSClient is available and API key is provided, execute real client query
     if api_key:
@@ -54,13 +63,7 @@ def fetch_hotspots(
             from data.firms.client import FIRMSClient
 
             client = FIRMSClient(api_key=api_key)
-
-            # Parse bounding box if comma-separated floats
-            parsed_region: Any = region
-            if "," in region:
-                parts = [float(p.strip()) for p in region.split(",")]
-                if len(parts) == 4:
-                    parsed_region = parts
+            parsed_region = FIRMSClient.resolve_region(region)
 
             # Run asynchronous client call
             try:
