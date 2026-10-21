@@ -14,13 +14,13 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
-            <FileText className="h-7 w-7 text-amber-400" />
+          <h1 className="text-2xl md:text-3xl font-mono font-medium tracking-[-0.02em] text-black flex items-center gap-2.5">
+            <FileText className="h-7 w-7 text-amber-700" />
             <span>Reports & Case History</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-sm text-slate-600 mt-1">
             Dokumentasi berkas hasil investigasi AI, evaluasi kerusakan vegetasi, dan catatan verifikasi tim gabungan.
           </p>
         </div>

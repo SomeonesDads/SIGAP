@@ -26,7 +26,7 @@ export function MapContainer({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-xl border border-slate-800 bg-slate-950 shadow-inner flex flex-col items-center justify-center",
+        "relative w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner flex flex-col items-center justify-center",
         height,
         className
       )}
@@ -48,10 +48,10 @@ export function MapContainer({
       <div className="absolute top-1/3 left-1/3 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
 
       {/* Top Map Header / Controls Overlay */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-lg text-xs backdrop-blur-md text-slate-200">
-        <Compass className="h-4 w-4 text-amber-400 animate-pulse" />
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-white border border-slate-300/80 px-3 py-1.5 rounded-lg text-xs backdrop-blur-md text-slate-800">
+        <Compass className="h-4 w-4 text-amber-700 animate-pulse" />
         <span className="font-semibold">{title || "Peta Analisis Spasial Karhutla"}</span>
-        <span className="text-slate-400 border-l border-slate-700 pl-2">
+        <span className="text-slate-600 border-l border-slate-300 pl-2">
           {center[0].toFixed(4)}°, {center[1].toFixed(4)}°
         </span>
       </div>
@@ -62,7 +62,7 @@ export function MapContainer({
           {activeLayers.map((layer) => (
             <span
               key={layer}
-              className="px-2.5 py-1 text-xs font-medium rounded-md bg-slate-900/90 border border-slate-700/80 text-amber-300 backdrop-blur-md flex items-center gap-1"
+              className="px-2.5 py-1 text-xs font-medium rounded-md bg-white border border-slate-300/80 text-amber-700 backdrop-blur-md flex items-center gap-1"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               {layer}
@@ -72,35 +72,35 @@ export function MapContainer({
       )}
 
       {/* Center placeholder info ready for Leaflet */}
-      <div className="relative z-10 flex flex-col items-center justify-center p-6 text-center max-w-md bg-slate-900/80 rounded-2xl border border-slate-800 backdrop-blur-md shadow-2xl">
-        <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-3">
+      <div className="relative z-10 flex flex-col items-center justify-center p-6 text-center max-w-md bg-white rounded-2xl border border-slate-200 backdrop-blur-md shadow-2xl">
+        <div className="h-12 w-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 flex items-center justify-center mb-3">
           <MapPin className="h-6 w-6" />
         </div>
-        <h4 className="text-base font-semibold text-slate-100">
+        <h4 className="text-base font-semibold text-slate-900">
           Map will render here
         </h4>
-        <p className="text-xs text-slate-400 mt-1">
+        <p className="text-xs text-slate-600 mt-1">
           Leaflet & React-Leaflet integration container. Mendukung visualisasi titik panas NASA FIRMS, segmentasi U-Net, dan dNBR overlay.
         </p>
-        <div className="mt-3 inline-flex items-center gap-2 text-[11px] text-slate-400 bg-slate-950/60 px-2.5 py-1 rounded border border-slate-800">
-          <Layers className="h-3.5 w-3.5 text-slate-400" />
+        <div className="mt-3 inline-flex items-center gap-2 text-[11px] text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
+          <Layers className="h-3.5 w-3.5 text-slate-600" />
           <span>Zoom: {zoom}x • Center: [{center.join(", ")}]</span>
         </div>
       </div>
 
       {/* Bottom map control buttons simulation */}
       {interactive && (
-        <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1.5 bg-slate-900/90 border border-slate-700/80 p-1 rounded-lg backdrop-blur-md">
+        <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1.5 bg-white border border-slate-300/80 p-1 rounded-lg backdrop-blur-md">
           <button
             type="button"
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+            className="p-1.5 text-slate-700 hover:text-white hover:bg-slate-100 rounded transition-colors"
             title="Zoom In"
           >
             <ZoomIn className="h-4 w-4" />
           </button>
           <button
             type="button"
-            className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
+            className="p-1.5 text-slate-700 hover:text-white hover:bg-slate-100 rounded transition-colors"
             title="Zoom Out"
           >
             <ZoomOut className="h-4 w-4" />

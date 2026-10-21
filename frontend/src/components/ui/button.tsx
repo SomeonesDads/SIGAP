@@ -20,26 +20,27 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      "inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer";
+      "inline-flex items-center justify-center font-mono font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sigap-cobalt focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer";
 
+    // Variants follow the Figma "Drone X" pills: solid cobalt = active, 40% cobalt = secondary
     const variantStyles = {
       primary:
-        "bg-amber-500 text-slate-950 font-semibold hover:bg-amber-400 active:bg-amber-600 shadow-sm shadow-amber-500/20",
+        "bg-sigap-cobalt text-white font-semibold hover:bg-[#0f63bd] active:bg-[#0d569f]",
       secondary:
-        "bg-slate-800 text-slate-100 hover:bg-slate-700 active:bg-slate-750 border border-slate-700",
+        "bg-sigap-panel text-slate-900 hover:bg-[#cfcfcf] active:bg-[#c4c4c4]",
       ghost:
-        "text-slate-300 hover:bg-slate-800/60 hover:text-slate-100",
+        "text-slate-700 hover:bg-black/5 hover:text-slate-900",
       danger:
-        "bg-rose-600 text-white hover:bg-rose-500 active:bg-rose-700",
+        "bg-sigap-crimson text-white hover:bg-[#bb120f] active:bg-[#a10f0d]",
       outline:
-        "border border-slate-700 bg-transparent text-slate-200 hover:bg-slate-800",
+        "border-2 border-sigap-cobalt bg-transparent text-sigap-cobalt hover:bg-sigap-cobalt/10",
     };
 
     const sizeStyles = {
-      sm: "h-8 px-3 text-xs rounded-md gap-1.5",
-      md: "h-10 px-4 text-sm rounded-lg gap-2",
-      lg: "h-12 px-6 text-base rounded-lg gap-2.5",
-      icon: "h-10 w-10 p-2 rounded-lg",
+      sm: "h-8 px-3 text-xs rounded-[8px] gap-1.5",
+      md: "h-10 px-4 text-sm rounded-[10px] gap-2",
+      lg: "h-12 px-6 text-base rounded-[10px] gap-2.5",
+      icon: "h-10 w-10 p-2 rounded-[10px]",
     };
 
     return (

@@ -119,17 +119,17 @@ export function ReportList() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari ID kasus, wilayah, atau nama pemeriksa..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-900/90 pl-10 pr-4 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            className="w-full rounded-lg border border-slate-200 bg-white pl-10 pr-4 py-2 text-xs text-slate-900 placeholder-slate-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
-            <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs">
+            <Filter className="h-3.5 w-3.5 text-slate-600" />
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="bg-transparent text-slate-200 font-medium focus:outline-none"
+              className="bg-transparent text-slate-800 font-medium focus:outline-none"
             >
               <option value="all">Semua Status</option>
               <option value="Selesai">Selesai</option>
@@ -142,10 +142,10 @@ export function ReportList() {
       </div>
 
       {/* Reports Table Card */}
-      <Card className="p-0 overflow-hidden border-slate-800 bg-slate-900/80 shadow-xl">
+      <Card className="p-0 overflow-hidden border-slate-200 bg-white shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/70 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+            <thead className="bg-slate-100 text-slate-600 uppercase tracking-wider text-[11px] border-b border-slate-200">
               <tr>
                 <th className="py-3 px-4">ID Kasus</th>
                 <th className="py-3 px-4">Wilayah Operasional</th>
@@ -155,7 +155,7 @@ export function ReportList() {
                 <th className="py-3 px-4 text-right">Format Ekspor</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200/60">
               {filteredReports.map((r) => {
                 const isDraft = r.status === "Draft";
                 const isCompleted = r.status === "Selesai";
@@ -164,11 +164,11 @@ export function ReportList() {
                 return (
                   <tr
                     key={r.id}
-                    className="hover:bg-slate-800/40 transition-colors"
+                    className="hover:bg-slate-100 transition-colors"
                   >
                     {/* ID */}
                     <td className="py-4 px-4">
-                      <div className="font-mono font-bold text-amber-400 text-xs">
+                      <div className="font-mono font-bold text-amber-700 text-xs">
                         {r.caseNumber}
                       </div>
                       <div className="text-[10px] text-slate-500 font-mono">
@@ -178,16 +178,16 @@ export function ReportList() {
 
                     {/* Wilayah & Ringkasan */}
                     <td className="py-4 px-4 max-w-xs">
-                      <div className="font-semibold text-slate-100">
+                      <div className="font-semibold text-slate-900">
                         {r.region}
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2 leading-relaxed">
+                      <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2 leading-relaxed">
                         {r.summary}
                       </p>
                     </td>
 
                     {/* Tanggal */}
-                    <td className="py-4 px-4 text-slate-300 font-medium whitespace-nowrap">
+                    <td className="py-4 px-4 text-slate-700 font-medium whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-slate-500" />
                         <span>{r.date}</span>
@@ -196,11 +196,11 @@ export function ReportList() {
 
                     {/* Pemeriksa */}
                     <td className="py-4 px-4">
-                      <div className="text-slate-200 font-medium">
+                      <div className="text-slate-800 font-medium">
                         {r.examiner}
                       </div>
                       {r.totalBurnedAreaHa && (
-                        <div className="text-[11px] text-amber-400/90 font-medium">
+                        <div className="text-[11px] text-amber-700/90 font-medium">
                           Luas: {r.totalBurnedAreaHa.toLocaleString()} Ha
                         </div>
                       )}
@@ -211,12 +211,12 @@ export function ReportList() {
                       <span
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
                           isDraft
-                            ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                            ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
                             : isCompleted
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                            ? "bg-emerald-500/10 text-emerald-700 border-emerald-500/30"
                             : isReviewed
-                            ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                            : "bg-slate-800 text-slate-400 border-slate-700"
+                            ? "bg-blue-500/10 text-blue-700 border-blue-500/30"
+                            : "bg-slate-100 text-slate-600 border-slate-300"
                         }`}
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -231,10 +231,10 @@ export function ReportList() {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleExport("pdf", r.caseNumber)}
-                          className="h-8 px-2.5 text-xs gap-1 border-slate-700 hover:border-amber-500/50 hover:text-amber-300"
+                          className="h-8 px-2.5 text-xs gap-1 border-slate-300 hover:border-amber-500/50 hover:text-amber-700"
                           title="Ekspor PDF Formal"
                         >
-                          <FileText className="h-3.5 w-3.5 text-rose-400" />
+                          <FileText className="h-3.5 w-3.5 text-rose-700" />
                           <span>PDF</span>
                         </Button>
 
@@ -242,10 +242,10 @@ export function ReportList() {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleExport("geojson", r.caseNumber)}
-                          className="h-8 px-2.5 text-xs gap-1 border-slate-700 hover:border-amber-500/50 hover:text-amber-300"
+                          className="h-8 px-2.5 text-xs gap-1 border-slate-300 hover:border-amber-500/50 hover:text-amber-700"
                           title="Ekspor Spasial GeoJSON"
                         >
-                          <FileCode className="h-3.5 w-3.5 text-emerald-400" />
+                          <FileCode className="h-3.5 w-3.5 text-emerald-700" />
                           <span>GeoJSON</span>
                         </Button>
                       </div>
