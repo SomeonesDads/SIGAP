@@ -7,7 +7,7 @@ import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 
 import { SEVERITY_META, type Drone, type Hotspot } from "@/lib/monitoring";
 import { HOTSPOT_CARD_TIP, HotspotCard } from "@/components/monitor/hotspot-card";
 
-const INDONESIA_CENTER: L.LatLngTuple = [-1.5, 114.5];
+const INDONESIA_CENTER: L.LatLngTuple = [-2.2, 117.5];
 const SELECTED_SIZE = 50;
 
 function fireIcon(hotspot: Hotspot, selected: boolean): L.DivIcon {
@@ -104,7 +104,7 @@ export default function FireMap({
   return (
     <MapContainer
       center={INDONESIA_CENTER}
-      zoom={6}
+      zoom={5}
       minZoom={4}
       maxZoom={13}
       zoomControl={false}

@@ -115,10 +115,10 @@ export function FireMapView() {
   const [spatialContext, setSpatialContext] = useState<SpatialContextResponse | null>(null);
   const [imageryMeta, setImageryMeta] = useState<ImageryMetadataResponse | null>(null);
 
-  // 1. Load live FIRMS monitoring clusters for dynamic region selector
+  // 1. Load live FIRMS monitoring clusters across all of Indonesia for dynamic region selector
   useEffect(() => {
     let active = true;
-    fetchMonitoringHotspots("Kalimantan", 12).then((res) => {
+    fetchMonitoringHotspots("Indonesia", 25).then((res) => {
       if (!active) return;
       if (res.hotspots.length > 0) {
         setLiveClusters(res.hotspots);
@@ -133,16 +133,17 @@ export function FireMapView() {
 
   // Build dynamic region dropdown options from live clusters + named places
   const regionOptions = useMemo<RegionOption[]>(() => {
-    const clusterOpts: RegionOption[] = liveClusters.slice(0, 8).map((c, idx) => {
+    const clusterOpts: RegionOption[] = liveClusters.slice(0, 18).map((c, idx) => {
       const count = c.hotspotCount ?? 1;
       const frp = c.totalFrp ?? 35;
       const scale = Math.min(2.4, Math.max(0.7, 0.75 + Math.log10(Math.max(1, count)) * 0.55));
+      const bboxQuery = `${(c.lon - 2.0).toFixed(2)},${(c.lat - 2.0).toFixed(2)},${(c.lon + 2.0).toFixed(2)},${(c.lat + 2.0).toFixed(2)}`;
       return {
         key: `cluster-${idx}`,
-        label: `${c.id}: ${c.location.split(",")[0]} (${count} titik • ${c.district ?? "Kalimantan"})`,
+        label: `${c.id}: ${c.location.split(",")[0]} (${count} titik • ${c.district ?? "Indonesia"})`,
         center: [c.lat, c.lon],
         zoom: 12,
-        regionQuery: c.district || "Kalimantan",
+        regionQuery: bboxQuery,
         scaleFactor: Number(scale.toFixed(2)),
         acqDate: c.acqDate,
         hotspotCount: count,
@@ -155,7 +156,7 @@ export function FireMapView() {
       label: `Wilayah: ${p.name}`,
       center: [p.lat, p.lon],
       zoom: Math.max(10, p.zoom),
-      regionQuery: p.name,
+      regionQuery: `${(p.lon - 2.5).toFixed(2)},${(p.lat - 2.5).toFixed(2)},${(p.lon + 2.5).toFixed(2)},${(p.lat + 2.5).toFixed(2)}`,
       scaleFactor: 1.0,
     }));
 
@@ -170,7 +171,7 @@ export function FireMapView() {
         label: "Pulang Pisau, Kalteng",
         center: [-2.9812, 114.1205],
         zoom: 11,
-        regionQuery: "Kalimantan Tengah",
+        regionQuery: "Indonesia",
         scaleFactor: 1.0,
       }
     );
@@ -182,7 +183,7 @@ export function FireMapView() {
     const [lat, lon] = currentRegionConfig.center;
 
     Promise.all([
-      fetchRawHotspots(currentRegionConfig.regionQuery, 250),
+      fetchRawHotspots(currentRegionConfig.regionQuery, 300),
       fetchSegmentationData(lat, lon, currentRegionConfig.scaleFactor),
       fetchSpatialContext(lat, lon),
       fetchImageryMetadata(currentRegionConfig.acqDate, lat, lon),

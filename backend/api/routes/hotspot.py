@@ -192,6 +192,94 @@ _INDONESIAN_DISTRICTS: list[dict[str, Any]] = [
         "base_lat": -3.44,
         "base_lon": 114.83,
     },
+    {
+        "name": "Kec. Mandau, Kab. Bengkalis",
+        "district": "Kab. Bengkalis, Riau",
+        "lat": 1.28,
+        "lon": 101.25,
+        "peatland": True,
+        "soil": "Kubah Gambut Pesisir > 3 m",
+        "fire_type": "Bawah permukaan (gambut)",
+        "base_lat": 0.46,
+        "base_lon": 101.44,
+    },
+    {
+        "name": "Kec. Kumpeh, Kab. Muaro Jambi",
+        "district": "Kab. Muaro Jambi, Jambi",
+        "lat": -1.48,
+        "lon": 103.92,
+        "peatland": True,
+        "soil": "Gambut Dalam Berbak",
+        "fire_type": "Bawah permukaan (gambut)",
+        "base_lat": -1.63,
+        "base_lon": 103.65,
+    },
+    {
+        "name": "Kec. Tanjung Palas, Kab. Bulungan",
+        "district": "Kab. Bulungan, Kaltara",
+        "lat": 2.82,
+        "lon": 117.36,
+        "peatland": False,
+        "soil": "Mineral & Aluvial",
+        "fire_type": "Permukaan",
+        "base_lat": 3.32,
+        "base_lon": 117.57,
+    },
+    {
+        "name": "Kawasan Bromo Tengger Semeru, Kab. Probolinggo",
+        "district": "Kab. Probolinggo, Jatim",
+        "lat": -7.94,
+        "lon": 112.95,
+        "peatland": False,
+        "soil": "Vulkanik & Savana",
+        "fire_type": "Permukaan (Savana)",
+        "base_lat": -7.38,
+        "base_lon": 112.79,
+    },
+    {
+        "name": "Kec. Nuha, Kab. Luwu Timur",
+        "district": "Kab. Luwu Timur, Sulsel",
+        "lat": -2.53,
+        "lon": 121.35,
+        "peatland": False,
+        "soil": "Mineral Ultrabasa",
+        "fire_type": "Permukaan",
+        "base_lat": -5.06,
+        "base_lon": 119.55,
+    },
+    {
+        "name": "Kec. Tinanggea, Kab. Konawe Selatan",
+        "district": "Kab. Konawe Selatan, Sultra",
+        "lat": -4.35,
+        "lon": 122.15,
+        "peatland": False,
+        "soil": "Mineral Savana",
+        "fire_type": "Permukaan",
+        "base_lat": -4.08,
+        "base_lon": 122.47,
+    },
+    {
+        "name": "Kec. Kahaungu Eti, Kab. Sumba Timur",
+        "district": "Kab. Sumba Timur, NTT",
+        "lat": -9.85,
+        "lon": 120.28,
+        "peatland": False,
+        "soil": "Karst & Savana Kering",
+        "fire_type": "Permukaan (Savana)",
+        "base_lat": -9.67,
+        "base_lon": 120.30,
+    },
+    {
+        "name": "Distrik Tanah Miring, Kab. Merauke",
+        "district": "Kab. Merauke, Papua Selatan",
+        "lat": -8.28,
+        "lon": 140.48,
+        "peatland": True,
+        "soil": "Rawa Gambut & Savana Wasur",
+        "fire_type": "Permukaan & rawa",
+        "base_lat": -8.52,
+        "base_lon": 140.42,
+    },
 ]
 
 
@@ -202,6 +290,82 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dl = math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _archipelago_bucket(lat: float, lon: float) -> str:
+    """Assign an Indonesian coordinate to one of 9 macro-regional buckets for spatial diversification."""
+    if lon < 106.5 and lat > -6.0:
+        if lat >= -0.5:
+            return "sumatera_utara_riau"
+        return "sumatera_selatan_jambi"
+    if lat < -5.8 and lon < 116.0:
+        return "jawa"
+    if lat < -7.5 and 115.0 <= lon <= 127.5:
+        return "bali_nusa_tenggara"
+    if 108.0 <= lon <= 119.2 and -4.5 <= lat <= 4.5:
+        if lon < 111.8:
+            return "kalimantan_barat"
+        if lat > -1.8 and lon > 115.0:
+            return "kalimantan_timur_utara"
+        if lat < -2.4 and lon > 114.4:
+            return "kalimantan_selatan"
+        return "kalimantan_tengah"
+    if 118.5 <= lon <= 126.5 and -6.5 <= lat <= 2.0:
+        return "sulawesi"
+    return "maluku_papua"
+
+
+def _diversify_clusters_by_region(
+    clusters: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    """Select clusters round-robin across Indonesian macro-regions so no single province monopolizes the feed."""
+    if len(clusters) <= limit:
+        return clusters
+
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for c in clusters:
+        centroid = c.get("stats", {}).get("centroid", {})
+        lat = float(centroid.get("latitude", 0.0))
+        lon = float(centroid.get("longitude", 0.0))
+        bkey = _archipelago_bucket(lat, lon)
+        buckets.setdefault(bkey, []).append(c)
+
+    # Sort each regional bucket by hotspot count + FRP intensity
+    for bkey in buckets:
+        buckets[bkey].sort(
+            key=lambda c: (
+                int(c.get("count", 0)),
+                float(c.get("stats", {}).get("frp", {}).get("total_mw", 0.0)),
+            ),
+            reverse=True,
+        )
+
+    # Order buckets by their strongest cluster so highest-severity regions lead each round
+    ordered_keys = sorted(
+        buckets.keys(),
+        key=lambda k: (
+            int(buckets[k][0].get("count", 0)),
+            float(buckets[k][0].get("stats", {}).get("frp", {}).get("total_mw", 0.0)),
+        ),
+        reverse=True,
+    )
+
+    selected: list[dict[str, Any]] = []
+    round_idx = 0
+    while len(selected) < limit:
+        added_in_round = False
+        for k in ordered_keys:
+            if round_idx < len(buckets[k]):
+                selected.append(buckets[k][round_idx])
+                added_in_round = True
+                if len(selected) >= limit:
+                    break
+        if not added_in_round:
+            break
+        round_idx += 1
+
+    return selected
 
 
 _REVERSE_GEO_CACHE: dict[tuple[float, float], dict[str, Any]] = {}
@@ -222,12 +386,12 @@ def _reverse_geocode_osm(lat: float, lon: float) -> dict[str, str] | None:
                 "format": "jsonv2",
                 "lat": round(lat, 4),
                 "lon": round(lon, 4),
-                "zoom": 12,
+                "zoom": 10,
                 "addressdetails": 1,
                 "accept-language": "id",
             },
             headers={"User-Agent": "SIGAP-Wildfire-Intelligence/1.0"},
-            timeout=2.5,
+            timeout=1.8,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -251,9 +415,8 @@ def _reverse_geocode_osm(lat: float, lon: float) -> dict[str, str] | None:
                 or addr.get("county")
                 or ""
             )
-            state = addr.get("state") or "Kalimantan"
+            state = addr.get("state") or addr.get("archipelago") or "Indonesia"
             parts = [p for p in [village, subdistrict, regency] if p]
-            # Deduplicate consecutive identical names
             deduped: list[str] = []
             for p in parts:
                 if not deduped or deduped[-1].lower() != p.lower():
@@ -289,18 +452,26 @@ def _nearest_district(lat: float, lon: float, allow_live_geocode: bool = True) -
         fallback_name = str(best["name"])
         fallback_district = str(best["district"])
     else:
-        is_peat = (-3.5 <= lat <= 0.5 and 109.5 <= lon <= 116.5) or (-4.2 <= lat <= 1.5 and 100.5 <= lon <= 106.0)
-        if lon < 107.0:
-            prov = "Sumatera Selatan / Riau"
-        elif lat < -2.6 and lon > 114.4:
-            prov = "Kalimantan Selatan"
-        elif lon < 111.5:
-            prov = "Kalimantan Barat"
-        elif lon > 115.4 and lat > -1.5:
-            prov = "Kalimantan Timur"
-        else:
-            prov = "Kalimantan Tengah"
-        soil = "Gambut Tropis 1-3 m" if is_peat else "Tanah Mineral / Aluvial"
+        is_peat = (
+            (-3.6 <= lat <= 0.5 and 109.5 <= lon <= 116.5)
+            or (-4.2 <= lat <= 2.2 and 100.2 <= lon <= 106.0)
+            or (-8.8 <= lat <= -6.0 and 138.0 <= lon <= 141.0)
+        )
+        bucket = _archipelago_bucket(lat, lon)
+        prov_map = {
+            "sumatera_utara_riau": "Riau / Sumatera Utara",
+            "sumatera_selatan_jambi": "Sumatera Selatan / Jambi",
+            "jawa": "Jawa Timur / Jawa Tengah",
+            "bali_nusa_tenggara": "Nusa Tenggara Timur / NTB",
+            "kalimantan_barat": "Kalimantan Barat",
+            "kalimantan_tengah": "Kalimantan Tengah",
+            "kalimantan_selatan": "Kalimantan Selatan",
+            "kalimantan_timur_utara": "Kalimantan Timur / Utara",
+            "sulawesi": "Sulawesi Selatan / Tenggara",
+            "maluku_papua": "Papua Selatan / Maluku",
+        }
+        prov = prov_map.get(bucket, "Indonesia")
+        soil = "Gambut Tropis 1-3 m" if is_peat else "Tanah Mineral / Savana"
         fire_type = "Permukaan & gambut" if is_peat else "Permukaan"
         fallback_name = f"Kawasan Hutan & Lahan ({lat:.2f}°, {lon:.2f}°), {prov}"
         fallback_district = prov
@@ -347,7 +518,7 @@ def _get_firms_api_key() -> str:
 
 
 async def fetch_live_or_fallback_hotspots(
-    region: str = "Kalimantan",
+    region: str = "Indonesia",
     date_start: str | None = None,
     date_end: str | None = None,
     source: str = "VIIRS_SNPP_NRT",
@@ -433,30 +604,57 @@ def _to_hotspot_model(h: dict[str, Any]) -> Hotspot:
 
 @router.get("/", response_model=list[Hotspot])
 async def get_hotspots(
-    region: str = Query("Kalimantan Tengah", description="Target region or province name"),
+    region: str = Query("Indonesia", description="Target region or province name"),
     date_start: str | None = Query(None, description="Start date (YYYY-MM-DD); omit for latest NRT"),
     date_end: str | None = Query(None, description="End date (YYYY-MM-DD)"),
     source: str = Query("VIIRS_SNPP_NRT", description="Satellite sensor source"),
-    limit: int = Query(200, ge=1, le=2000, description="Max hotspots returned"),
+    limit: int = Query(300, ge=1, le=2000, description="Max hotspots returned"),
 ) -> list[Hotspot]:
-    """Retrieve live thermal anomaly hotspots from NASA FIRMS for a given region."""
+    """Retrieve live thermal anomaly hotspots from NASA FIRMS for a given region with spatial diversification."""
     raw_list, _ = await fetch_live_or_fallback_hotspots(
         region=region,
         date_start=date_start,
         date_end=date_end,
         source=source,
     )
-    # Sort by highest FRP first so most intense detections are prioritized
-    sorted_raw = sorted(raw_list, key=lambda x: float(x.get("frp") or 0.0), reverse=True)[:limit]
-    return [_to_hotspot_model(h) for h in sorted_raw]
+    sorted_raw = sorted(raw_list, key=lambda x: float(x.get("frp") or 0.0), reverse=True)
+    if len(sorted_raw) <= limit:
+        return [_to_hotspot_model(h) for h in sorted_raw]
+
+    # Spatial grid round-robin (1.5° x 1.5° cells) so wide-area queries cover all active islands
+    grid: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for h in sorted_raw:
+        cell = (int(float(h.get("latitude", 0.0)) / 1.5), int(float(h.get("longitude", 0.0)) / 1.5))
+        grid.setdefault(cell, []).append(h)
+
+    cell_keys = sorted(
+        grid.keys(),
+        key=lambda k: float(grid[k][0].get("frp") or 0.0),
+        reverse=True,
+    )
+    diversified: list[dict[str, Any]] = []
+    r_idx = 0
+    while len(diversified) < limit:
+        added = False
+        for ck in cell_keys:
+            if r_idx < len(grid[ck]):
+                diversified.append(grid[ck][r_idx])
+                added = True
+                if len(diversified) >= limit:
+                    break
+        if not added:
+            break
+        r_idx += 1
+
+    return [_to_hotspot_model(h) for h in diversified]
 
 
 @router.get("/clusters", response_model=list[HotspotCluster])
 async def get_hotspot_clusters(
-    region: str = Query("Kalimantan Tengah", description="Target region"),
+    region: str = Query("Indonesia", description="Target region"),
     date_start: str | None = Query(None, description="Start date (YYYY-MM-DD)"),
     date_end: str | None = Query(None, description="End date (YYYY-MM-DD)"),
-    eps_km: float = Query(5.0, description="DBSCAN clustering radius in kilometers"),
+    eps_km: float = Query(8.0, description="DBSCAN clustering radius in kilometers"),
     min_samples: int = Query(2, description="Minimum points to form a cluster"),
 ) -> list[HotspotCluster]:
     """Retrieve spatially clustered live hotspots using DBSCAN with spherical Haversine distance."""
@@ -466,9 +664,10 @@ async def get_hotspot_clusters(
         date_end=date_end,
     )
     clusters_raw = cluster_hotspots(raw_list, eps_km=eps_km, min_samples=min_samples)
+    diversified_clusters = _diversify_clusters_by_region(clusters_raw, limit=30)
 
     results: list[HotspotCluster] = []
-    for idx, c in enumerate(clusters_raw[:30], start=1):
+    for idx, c in enumerate(diversified_clusters, start=1):
         stats = c.get("stats", {})
         centroid = stats.get("centroid", {})
         frp_stats = stats.get("frp", {})
@@ -498,10 +697,10 @@ _MONITORING_CACHE: dict[tuple[str, int], tuple[float, dict[str, Any]]] = {}
 
 @router.get("/monitoring")
 async def get_monitoring_hotspots(
-    region: str = Query("Kalimantan", description="Target region or 'Indonesia'"),
-    limit: int = Query(15, ge=1, le=50, description="Max enriched priority hotspots to return"),
+    region: str = Query("Indonesia", description="Target region or 'Indonesia'"),
+    limit: int = Query(30, ge=1, le=100, description="Max enriched priority hotspots to return"),
 ) -> dict[str, Any]:
-    """Return live NASA FIRMS hotspots aggregated & scored for the SIGAP monitoring dashboard and priority matrix."""
+    """Return live NASA FIRMS hotspots aggregated, regionally diversified & scored across Indonesia."""
     cache_key = (region.lower().strip(), limit)
     now = time.time()
     if cache_key in _MONITORING_CACHE:
@@ -511,11 +710,11 @@ async def get_monitoring_hotspots(
 
     raw_list, is_live = await fetch_live_or_fallback_hotspots(region=region, day_range=2)
 
-    # Filter to Indonesian land bounds (focusing on Kalimantan & Sumatera active zones)
+    # Filter to full Indonesian archipelago bounds (Sabang to Merauke, Miangas to Rote)
     idn_points = [
         h for h in raw_list
-        if -5.0 <= float(h.get("latitude", 0.0)) <= 2.4
-        and 100.0 <= float(h.get("longitude", 0.0)) <= 118.2
+        if -11.0 <= float(h.get("latitude", 0.0)) <= 6.0
+        and 95.0 <= float(h.get("longitude", 0.0)) <= 141.0
     ]
     if not idn_points:
         idn_points = raw_list
@@ -523,12 +722,12 @@ async def get_monitoring_hotspots(
     # Cluster nearby points using DBSCAN (8 km radius, min 2 points)
     clusters = cluster_hotspots(idn_points, eps_km=8.0, min_samples=2)
 
-    # If fewer than 8 clusters, supplement with top individual high-FRP detections
-    candidate_groups: list[dict[str, Any]] = list(clusters)
+    # Diversify across Indonesian islands & provinces so all active regions are represented
+    candidate_groups: list[dict[str, Any]] = _diversify_clusters_by_region(clusters, limit=limit)
     if len(candidate_groups) < limit:
         used_coords = {
             (round(float(p["latitude"]), 3), round(float(p["longitude"]), 3))
-            for c in clusters
+            for c in candidate_groups
             for p in c.get("hotspots", [])
         }
         remaining = [
@@ -558,7 +757,7 @@ async def get_monitoring_hotspots(
         count = int(grp.get("count", len(pts)))
         total_frp = float(stats.get("frp", {}).get("total_mw", 0.0))
 
-        district_info = _nearest_district(lat, lon, allow_live_geocode=(idx <= 6))
+        district_info = _nearest_district(lat, lon, allow_live_geocode=(idx <= 12))
         is_peat = bool(district_info["peatland"])
 
         # Estimate burned area (ha) and dNBR from cluster size & radiative power
@@ -651,4 +850,5 @@ async def get_monitoring_hotspots(
     }
     _MONITORING_CACHE[cache_key] = (now, payload)
     return payload
+
 

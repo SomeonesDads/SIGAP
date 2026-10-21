@@ -133,9 +133,9 @@ export function PriorityTable() {
 
   useEffect(() => {
     let active = true;
-    fetchMonitoringHotspots("Kalimantan", 10).then((res) => {
+    fetchMonitoringHotspots("Indonesia", 18).then((res) => {
       if (!active || !res.hotspots.length) return;
-      const mapped = res.hotspots.slice(0, 10).map(hotspotToPriorityItem);
+      const mapped = res.hotspots.slice(0, 18).map(hotspotToPriorityItem);
       setItems(mapped);
       setIsLive(res.is_live);
       setExpandedId(mapped[0]?.id ?? null);

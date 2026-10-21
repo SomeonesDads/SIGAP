@@ -23,8 +23,8 @@ function guessRegion(query: string): string {
  * Falls back to SAMPLE_HOTSPOTS only if the backend cannot be reached.
  */
 export async function fetchMonitoringHotspots(
-  region = "Kalimantan",
-  limit = 15
+  region = "Indonesia",
+  limit = 30
 ): Promise<MonitoringHotspotsResponse> {
   try {
     const res = await fetch(
@@ -204,8 +204,8 @@ export interface ImageryMetadataResponse {
 }
 
 export async function fetchRawHotspots(
-  region = "Kalimantan",
-  limit = 150
+  region = "Indonesia",
+  limit = 300
 ): Promise<RawHotspotPoint[]> {
   try {
     const res = await fetch(
@@ -299,8 +299,8 @@ export interface LiveReportsResponse {
 }
 
 export async function fetchReports(
-  region = "Kalimantan",
-  limit = 10
+  region = "Indonesia",
+  limit = 15
 ): Promise<LiveReportsResponse | null> {
   try {
     const res = await fetch(

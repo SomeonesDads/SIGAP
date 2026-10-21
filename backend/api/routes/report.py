@@ -58,8 +58,16 @@ def _examiner_for_district(district: str, idx: int) -> str:
         return "Manggala Agni Daops Sangkima / BPBD Kaltim"
     if "kalsel" in d_low or "kalimantan selatan" in d_low:
         return "Manggala Agni Daops Banjar / BPBD Kalsel"
-    if "sumsel" in d_low or "sumatera" in d_low or "riau" in d_low:
+    if "sumsel" in d_low or "sumatera" in d_low or "riau" in d_low or "jambi" in d_low:
         return "Manggala Agni Daops Sumatera / KPH Wilayah"
+    if "jawa" in d_low or "jatim" in d_low or "jateng" in d_low:
+        return "BPBD Provinsi & Perhutani Satgas Karhutla"
+    if "sulawesi" in d_low or "sulsel" in d_low or "sultra" in d_low:
+        return "Manggala Agni Daops Sulawesi / BPBD Wilayah"
+    if "nusa tenggara" in d_low or "ntt" in d_low or "ntb" in d_low:
+        return "BPBD NTT/NTB & Balai KSDA Wilayah"
+    if "papua" in d_low or "maluku" in d_low or "merauke" in d_low:
+        return "BPBD Papua Selatan & Balai TN Wasur"
     return "SIGAP Agent AI & Tim Analis Citra Satelit"
 
 
@@ -69,7 +77,7 @@ async def _resolve_cluster_for_report(
     lon: float | None = None,
 ) -> tuple[dict[str, Any], bool]:
     """Find the live monitoring cluster matching an investigation_id or coordinates."""
-    mon = await get_monitoring_hotspots(region="Kalimantan", limit=12)
+    mon = await get_monitoring_hotspots(region="Indonesia", limit=20)
     hotspots = mon.get("hotspots", [])
     is_live = bool(mon.get("is_live", False))
 
@@ -118,8 +126,8 @@ async def _resolve_cluster_for_report(
 
 @router.get("/", response_model=dict[str, Any])
 async def list_reports(
-    region: str = Query("Kalimantan", description="Operational region"),
-    limit: int = Query(10, ge=1, le=25),
+    region: str = Query("Indonesia", description="Operational region"),
+    limit: int = Query(12, ge=1, le=30),
 ) -> dict[str, Any]:
     """Generate live case history reports derived from active NASA FIRMS clusters and DINOv3 segmentation."""
     mon = await get_monitoring_hotspots(region=region, limit=limit)

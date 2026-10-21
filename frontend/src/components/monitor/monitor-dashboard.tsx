@@ -50,7 +50,7 @@ export function MonitorDashboard() {
   useEffect(() => {
     let active = true;
     const loadLive = async () => {
-      const data = await fetchMonitoringHotspots("Kalimantan", 15);
+      const data = await fetchMonitoringHotspots("Indonesia", 35);
       if (!active) return;
       setHotspots(data.hotspots);
       setIsLiveFeed(data.is_live);

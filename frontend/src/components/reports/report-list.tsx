@@ -47,7 +47,7 @@ export function ReportList() {
 
   useEffect(() => {
     let active = true;
-    fetchReports("Kalimantan", 10).then((res) => {
+    fetchReports("Indonesia", 15).then((res) => {
       if (!active || !res || !res.reports.length) return;
       setReports(res.reports);
       setIsLive(res.is_live);
