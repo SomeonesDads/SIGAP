@@ -7,5 +7,5 @@ export const metadata = {
 };
 
 export default function FireMapPage() {
-  return <MonitorDashboard initialDrawer="imagery" />;
+  return <MonitorDashboard />;
 }

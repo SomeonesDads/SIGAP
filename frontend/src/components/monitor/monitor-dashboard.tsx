@@ -7,7 +7,6 @@ import {
   Activity,
   ArrowDownToLine,
   Bot,
-  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -24,6 +23,8 @@ import {
   Home,
   Layers,
   Loader2,
+  Map as MapIcon,
+  MessageSquare,
   RotateCcw,
   Scan,
   Search,
@@ -45,7 +46,6 @@ import {
   type Severity,
 } from "@/lib/monitoring";
 import {
-  fetchImageryMetadata,
   fetchMonitoringHotspots,
   fetchRawHotspots,
   fetchReportGeoJSON,
@@ -53,7 +53,6 @@ import {
   fetchSegmentationData,
   fetchSpatialContext,
   getReportDownloadUrl,
-  type ImageryMetadataResponse,
   type LiveReportItem,
   type RawHotspotPoint,
   type SegmentationResponse,
@@ -81,9 +80,9 @@ const FireMap = dynamic(() => import("@/components/monitor/fire-map"), {
 const PRIORITY_COUNT = 4;
 const SIM_TICK_MS = 700;
 const LIVE_REFRESH_MS = 60_000;
-const CARD_OFFSET_PX = 95;
 
-export type BottomDrawerTab = "none" | "priority" | "imagery" | "reports";
+export type BottomDrawerTab = "none" | "priority" | "reports";
+export type MobileWorkspaceView = "split" | "map" | "chat";
 type CriteriaFilter = "all" | "critical" | "peatland" | "settlement";
 
 interface LayerToggleItem {
@@ -150,17 +149,6 @@ const INITIAL_REPORTS: LiveReportItem[] = [
   },
 ];
 
-/** Convert (lat, lon, zoom) to Web Mercator slippy-map tile (x, y) indices. */
-function latLonToTileXY(lat: number, lon: number, zoom: number): { x: number; y: number } {
-  const n = Math.pow(2, zoom);
-  const x = Math.floor(((lon + 180) / 360) * n);
-  const latRad = (lat * Math.PI) / 180;
-  const y = Math.floor(
-    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
-  );
-  return { x, y };
-}
-
 export interface MonitorDashboardProps {
   initialDrawer?: BottomDrawerTab;
   initialQuery?: string | null;
@@ -183,18 +171,35 @@ export function MonitorDashboard({
     () => new Set(["hotspots", "segmentation", "dnbr", "peatland", "settlement"])
   );
 
-  // Spatial Context & Imagery state for active/focused cluster
+  // Mobile responsive view & collapsible overlays
+  const [mobileView, setMobileView] = useState<MobileWorkspaceView>("split");
+  const [mobileLayersOpen, setMobileLayersOpen] = useState(false);
+
+  // Spatial Context state for active/focused cluster
   const [rawHotspots, setRawHotspots] = useState<RawHotspotPoint[]>([]);
   const [segmentation, setSegmentation] = useState<SegmentationResponse | null>(null);
   const [spatialContext, setSpatialContext] = useState<SpatialContextResponse | null>(null);
-  const [imageryMeta, setImageryMeta] = useState<ImageryMetadataResponse | null>(null);
-  const [sliderPosition, setSliderPosition] = useState(50);
 
   // Drone Simulation state
   const [simulation, setSimulation] = useState(false);
   const [drones, setDrones] = useState<Drone[]>([]);
   const [activeDroneId, setActiveDroneId] = useState("DRN-01");
   const [priorityOverlayCollapsed, setPriorityOverlayCollapsed] = useState(false);
+
+  // Collapse priority overlay by default on narrow mobile screens (< 768px)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setPriorityOverlayCollapsed(true);
+    }
+  }, []);
+
+  // Re-validate Leaflet canvas size when mobile view or drawer tab toggles
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      mapRef.current?.invalidateSize();
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [mobileView, initialDrawer]);
 
   // Bottom Drawer state (inside Map column — keeps both Map and Chat visible!)
   const [drawerTab, setDrawerTab] = useState<BottomDrawerTab>(initialDrawer);
@@ -293,7 +298,7 @@ export function MonitorDashboard({
   // Determine active focus coordinates for spatial layers & imagery comparison
   const focusTarget = selectedHotspot ?? activeCluster ?? ranked[0] ?? SAMPLE_HOTSPOTS[0];
 
-  // 3. Fetch raw hotspots, DINOv3 segmentation, OSM context, and satellite imagery for focused cluster
+  // 3. Fetch raw hotspots, DINOv3 segmentation, and OSM context for focused cluster
   useEffect(() => {
     if (!focusTarget) return;
     let active = true;
@@ -307,19 +312,17 @@ export function MonitorDashboard({
       fetchRawHotspots(bboxQuery, 150),
       fetchSegmentationData(lat, lon, Number(scale.toFixed(2))),
       fetchSpatialContext(lat, lon),
-      fetchImageryMetadata(focusTarget.acqDate, lat, lon),
-    ]).then(([pts, seg, ctx, img]) => {
+    ]).then(([pts, seg, ctx]) => {
       if (!active) return;
       setRawHotspots(pts);
       setSegmentation(seg);
       setSpatialContext(ctx);
-      setImageryMeta(img);
     });
 
     return () => {
       active = false;
     };
-  }, [focusTarget?.id, focusTarget?.lat, focusTarget?.lon, focusTarget?.acqDate, focusTarget?.hotspotCount]);
+  }, [focusTarget?.id, focusTarget?.lat, focusTarget?.lon, focusTarget?.hotspotCount]);
 
   const onMapReady = useCallback((map: L.Map) => {
     mapRef.current = map;
@@ -348,12 +351,14 @@ export function MonitorDashboard({
         next.add("segmentation");
         return next;
       });
+      setMobileView((v) => (v === "chat" ? "split" : v));
       focusHotspot(activeCluster, 11);
     }
   }, [activeCluster, focusSeq, focusHotspot]);
 
   const handleInvestigateHotspot = useCallback(
     (hotspot: Hotspot) => {
+      setMobileView((v) => (v === "map" ? "split" : v));
       focusHotspot(hotspot, 11);
       sendMessage(
         `Saya beroperasi di ${hotspot.location} (${hotspot.district ?? "Indonesia"}). Berikan rencana alokasi sumber daya taktis di sekeliling perimeter luar (POS-1 s/d POS-4 & UDP-1) untuk memadamkan klaster ${hotspot.id} tanpa memasuki pusat api.`
@@ -616,27 +621,6 @@ export function MonitorDashboard({
     });
   }, [reports, reportSearch, reportStatusFilter]);
 
-  // Satellite comparison tile grid around focusTarget
-  const tileGrid = useMemo(() => {
-    const z = 9;
-    const { x, y } = latLonToTileXY(focusTarget?.lat ?? -2.85, focusTarget?.lon ?? 114.12, z);
-    const gibsPostDate = imageryMeta?.post_fire.gibs_date || "2026-10-20";
-    const tiles: Array<{ key: string; preUrl: string; postUrl: string; postSwirUrl: string }> = [];
-    for (let dy = 0; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const tx = x + dx;
-        const ty = y + dy;
-        tiles.push({
-          key: `${z}-${tx}-${ty}`,
-          preUrl: `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/${z}/${ty}/${tx}.jpg`,
-          postUrl: `https://mt1.google.com/vt/lyrs=s&x=${tx}&y=${ty}&z=${z}`,
-          postSwirUrl: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_BandsM11-I2-I1/default/${gibsPostDate}/GoogleMapsCompatible_Level9/${z}/${ty}/${tx}.jpg`,
-        });
-      }
-    }
-    return tiles;
-  }, [focusTarget?.lat, focusTarget?.lon, imageryMeta]);
-
   const redHa = segmentation?.coverage_breakdown_ha.red_high_severity_ha ?? 34.4;
   const orangeHa = segmentation?.coverage_breakdown_ha.orange_moderate_severity_ha ?? 52.8;
   const yellowHa = segmentation?.coverage_breakdown_ha.yellow_low_severity_ha ?? 70.1;
@@ -648,17 +632,18 @@ export function MonitorDashboard({
   };
 
   return (
-    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-sigap-app text-slate-900">
-      {/* COMPACT UNIFIED TOP HEADER BAR */}
-      <header className="relative z-[1001] flex h-12 shrink-0 items-center justify-between gap-2 border-b border-slate-300 bg-sigap-panel px-3 shadow-xs">
-        {/* Left: Logo + Search */}
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <SigapLogo />
+    <div className="flex h-dvh w-screen min-w-[300px] flex-col overflow-hidden bg-sigap-app text-slate-900">
+      {/* COMPACT UNIFIED TOP HEADER BAR — Responsive down to 300px width */}
+      <header className="relative z-[1001] flex h-auto shrink-0 flex-col gap-1.5 border-b border-slate-300 bg-sigap-panel px-2 py-1.5 shadow-xs sm:h-12 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:px-3 sm:py-0">
+        {/* Top Row (Mobile) / Left (Desktop): Logo + Search */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <SigapLogo size="mobile" className="sm:hidden" />
+          <SigapLogo size="desktop" className="hidden sm:flex" />
           <LocationSearch
             hotspots={hotspots}
             onSelectHotspot={(h) => focusHotspot(h)}
             onSelectPlace={focusPlace}
-            className="w-full max-w-[320px] xl:max-w-[380px]"
+            className="w-full min-w-0 max-w-none sm:max-w-[320px] xl:max-w-[380px]"
           />
           {isLiveFeed && (
             <span className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-900 md:inline-flex shrink-0">
@@ -668,75 +653,118 @@ export function MonitorDashboard({
           )}
         </div>
 
-        {/* Center/Right: In-Viewport Panel Toggles + Simulation + Export */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center rounded-lg border border-slate-300 bg-white/80 p-0.5 text-xs">
+        {/* Bottom Row (Mobile) / Right (Desktop): Mobile View Switcher + Panel Toggles + Simulation + Export */}
+        <div className="flex items-center justify-between gap-1 sm:justify-end sm:gap-1.5 shrink-0">
+          {/* Mobile Workspace Mode Switcher (< lg, optimized for 300x730) */}
+          <div className="flex items-center rounded-lg border border-slate-300 bg-white/90 p-0.5 text-[10px] lg:hidden">
             <button
               type="button"
-              onClick={() => toggleDrawer("priority")}
+              onClick={() => setMobileView("map")}
               className={cn(
-                "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 font-mono text-[11px] font-semibold transition-colors",
-                drawerTab === "priority"
+                "flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold transition-colors",
+                mobileView === "map"
                   ? "bg-sigap-cobalt text-white"
                   : "text-slate-700 hover:bg-slate-200/70"
               )}
-              title="Buka/Tutup Matriks Prioritas MCDA"
+              title="Tampilan Peta Penuh"
             >
-              <ShieldAlert className="size-3.5" />
-              <span className="hidden sm:inline">Matriks Prioritas</span>
-              <span className="rounded bg-black/10 px-1 text-[10px]">{ranked.length}</span>
+              <MapIcon className="size-3" />
+              <span>Peta</span>
             </button>
-
             <button
               type="button"
-              onClick={() => toggleDrawer("imagery")}
+              onClick={() => setMobileView("split")}
               className={cn(
-                "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 font-mono text-[11px] font-semibold transition-colors",
-                drawerTab === "imagery"
+                "flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold transition-colors",
+                mobileView === "split"
                   ? "bg-sigap-cobalt text-white"
                   : "text-slate-700 hover:bg-slate-200/70"
               )}
-              title="Buka/Tutup Komparasi Citra Satelit Pra/Pasca Kebakaran"
+              title="Tampilan Split Peta & AI Chat"
             >
-              <Sliders className="size-3.5" />
-              <span className="hidden sm:inline">Citra Pra/Pasca</span>
+              <span>Split</span>
             </button>
-
             <button
               type="button"
-              onClick={() => toggleDrawer("reports")}
+              onClick={() => setMobileView("chat")}
               className={cn(
-                "flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 font-mono text-[11px] font-semibold transition-colors",
-                drawerTab === "reports"
+                "flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold transition-colors",
+                mobileView === "chat"
                   ? "bg-sigap-cobalt text-white"
                   : "text-slate-700 hover:bg-slate-200/70"
               )}
-              title="Buka/Tutup Laporan & Riwayat Kasus"
+              title="Tampilan Chat Investigasi AI Penuh"
             >
-              <FileText className="size-3.5" />
-              <span className="hidden sm:inline">Laporan</span>
-              <span className="rounded bg-black/10 px-1 text-[10px]">{reports.length}</span>
+              <MessageSquare className="size-3" />
+              <span>AI</span>
             </button>
           </div>
 
-          <SimulationToggle checked={simulation} onChange={toggleSimulation} />
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <div className="flex items-center rounded-lg border border-slate-300 bg-white/80 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  if (mobileView === "chat") setMobileView("split");
+                  toggleDrawer("priority");
+                }}
+                className={cn(
+                  "flex cursor-pointer items-center gap-1 rounded-md px-1.5 sm:px-2 py-1 font-mono text-[10px] sm:text-[11px] font-semibold transition-colors",
+                  drawerTab === "priority"
+                    ? "bg-sigap-cobalt text-white"
+                    : "text-slate-700 hover:bg-slate-200/70"
+                )}
+                title="Buka/Tutup Matriks Prioritas MCDA"
+              >
+                <ShieldAlert className="size-3 sm:size-3.5" />
+                <span className="hidden md:inline">Matriks Prioritas</span>
+                <span className="rounded bg-black/10 px-1 text-[9px] sm:text-[10px]">{ranked.length}</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={handleExportGeoJSON}
-            title="Ekspor GeoJSON Layer Aktif"
-            className="hidden cursor-pointer items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-[11px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 xl:flex"
-          >
-            <Download className="size-3.5 text-amber-700" />
-            <span>GeoJSON</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mobileView === "chat") setMobileView("split");
+                  toggleDrawer("reports");
+                }}
+                className={cn(
+                  "flex cursor-pointer items-center gap-1 rounded-md px-1.5 sm:px-2 py-1 font-mono text-[10px] sm:text-[11px] font-semibold transition-colors",
+                  drawerTab === "reports"
+                    ? "bg-sigap-cobalt text-white"
+                    : "text-slate-700 hover:bg-slate-200/70"
+                )}
+                title="Buka/Tutup Laporan & Riwayat Kasus"
+              >
+                <FileText className="size-3 sm:size-3.5" />
+                <span className="hidden md:inline">Laporan</span>
+                <span className="rounded bg-black/10 px-1 text-[9px] sm:text-[10px]">{reports.length}</span>
+              </button>
+            </div>
+
+            <SimulationToggle checked={simulation} onChange={toggleSimulation} />
+
+            <button
+              type="button"
+              onClick={handleExportGeoJSON}
+              title="Ekspor GeoJSON Layer Aktif"
+              className="hidden cursor-pointer items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-[11px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 xl:flex"
+            >
+              <Download className="size-3.5 text-amber-700" />
+              <span>GeoJSON</span>
+            </button>
+          </div>
         </div>
       </header>
 
       {/* MAIN SINGLE-VIEWPORT SPLIT WORKSPACE: MAP COLUMN (LEFT) + AI CHAT COLUMN (RIGHT) */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row overflow-hidden">
         {/* LEFT/CENTER: INTERACTIVE MAP + COMPACT OVERLAYS + COLLAPSIBLE IN-VIEWPORT DRAWER */}
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          className={cn(
+            "relative min-h-0 flex-1 flex-col overflow-hidden",
+            mobileView === "chat" ? "hidden lg:flex" : "flex"
+          )}
+        >
           {/* MAP CANVAS */}
           <div className="relative min-h-0 flex-1">
             <div className="absolute inset-0 z-0">
@@ -759,55 +787,86 @@ export function MonitorDashboard({
             </div>
 
             {/* TOP-LEFT MAP OVERLAY: Compact Severity Filter + Spatial Layer Toggles */}
-            <div className="pointer-events-none absolute left-2.5 top-2.5 z-[900] flex max-w-[calc(100%-260px)] flex-col gap-1.5">
-              <SeverityLegend
-                hidden={hiddenSeverities}
-                onToggle={toggleSeverity}
-                className="pointer-events-auto w-fit"
-              />
+            <div className="pointer-events-none absolute left-2 top-2 sm:left-2.5 sm:top-2.5 z-[900] flex max-w-[calc(100%-150px)] md:max-w-[calc(100%-265px)] flex-col gap-1.5">
+              {/* Mobile Compact Toggle Button for Filter & Layer (< md) */}
+              <button
+                type="button"
+                onClick={() => setMobileLayersOpen((v) => !v)}
+                className="pointer-events-auto flex w-fit cursor-pointer items-center gap-1 rounded-lg border border-slate-300/90 bg-white/95 px-2 py-1 font-mono text-[10px] font-semibold text-slate-800 shadow-md backdrop-blur-md md:hidden"
+              >
+                <Layers className="size-3 text-amber-700" />
+                <span>Filter & Layer ({activeLayerIds.size})</span>
+                {mobileLayersOpen ? (
+                  <ChevronUp className="size-3 text-slate-500" />
+                ) : (
+                  <ChevronDown className="size-3 text-slate-500" />
+                )}
+              </button>
 
-              {/* Compact Spatial Layer Chips */}
-              <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-xl border border-slate-300/80 bg-white/90 px-2.5 py-1.5 shadow-md backdrop-blur-md">
-                <span className="mr-1 flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                  <Layers className="size-3 text-amber-700" />
-                  Layer:
-                </span>
-                {SPATIAL_LAYERS.map((layer) => {
-                  const active = activeLayerIds.has(layer.id);
-                  return (
-                    <button
-                      key={layer.id}
-                      type="button"
-                      onClick={() => toggleSpatialLayer(layer.id)}
-                      title={layer.label}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-all",
-                        active
-                          ? layer.colorClass
-                          : "border-slate-200 bg-slate-50 text-slate-400 opacity-60 hover:opacity-90"
-                      )}
-                    >
-                      {layer.icon}
-                      <span>{layer.shortLabel}</span>
-                      {active ? (
-                        <Eye className="size-2.5 opacity-75" />
-                      ) : (
-                        <EyeOff className="size-2.5 opacity-50" />
-                      )}
-                    </button>
-                  );
-                })}
+              {/* Expanded Filter & Layer controls (always visible on md+, collapsible on mobile) */}
+              <div
+                className={cn(
+                  "flex-col gap-1.5 w-[min(276px,calc(100vw-20px))] md:w-auto",
+                  mobileLayersOpen ? "flex" : "hidden md:flex"
+                )}
+              >
+                <SeverityLegend
+                  hidden={hiddenSeverities}
+                  onToggle={toggleSeverity}
+                  className="pointer-events-auto w-fit"
+                />
+
+                {/* Compact Spatial Layer Chips */}
+                <div className="pointer-events-auto flex flex-wrap items-center gap-1 rounded-xl border border-slate-300/80 bg-white/90 px-2.5 py-1.5 shadow-md backdrop-blur-md">
+                  <span className="mr-1 flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    <Layers className="size-3 text-amber-700" />
+                    Layer:
+                  </span>
+                  {SPATIAL_LAYERS.map((layer) => {
+                    const active = activeLayerIds.has(layer.id);
+                    return (
+                      <button
+                        key={layer.id}
+                        type="button"
+                        onClick={() => toggleSpatialLayer(layer.id)}
+                        title={layer.label}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-all",
+                          active
+                            ? layer.colorClass
+                            : "border-slate-200 bg-slate-50 text-slate-400 opacity-60 hover:opacity-90"
+                        )}
+                      >
+                        {layer.icon}
+                        <span>{layer.shortLabel}</span>
+                        {active ? (
+                          <Eye className="size-2.5 opacity-75" />
+                        ) : (
+                          <EyeOff className="size-2.5 opacity-50" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
             {/* TOP-RIGHT MAP OVERLAY: Compact Collapsible Priority Hotspots & Drone Telemetry Card */}
-            <div className="pointer-events-none absolute right-2.5 top-2.5 z-[900] flex items-start gap-1.5">
+            <div className="pointer-events-none absolute right-2 top-2 sm:right-2.5 sm:top-2.5 z-[900] flex items-start gap-1 sm:gap-1.5">
               <ZoomControls onZoomIn={zoomIn} onZoomOut={zoomOut} className="pointer-events-auto" />
 
-              <aside className="pointer-events-auto w-[250px] xl:w-[270px] rounded-xl border border-slate-300/90 bg-sigap-panel/95 p-2.5 shadow-lg backdrop-blur-md">
-                <div className="flex items-center justify-between pb-1">
+              <aside
+                className={cn(
+                  "pointer-events-auto rounded-xl border border-slate-300/90 bg-sigap-panel/95 shadow-lg backdrop-blur-md transition-all",
+                  priorityOverlayCollapsed
+                    ? "w-auto px-2 py-1 md:w-[250px] xl:w-[270px] md:p-2.5"
+                    : "w-[min(248px,calc(100vw-54px))] p-2 md:w-[250px] xl:w-[270px] md:p-2.5"
+                )}
+              >
+                <div className="flex items-center justify-between gap-1.5">
                   <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                     Ringkasan Cepat
+                    <span className="md:hidden">Prioritas</span>
+                    <span className="hidden md:inline">Ringkasan Cepat</span>
                   </span>
                   <button
                     type="button"
@@ -824,7 +883,7 @@ export function MonitorDashboard({
                 </div>
 
                 {!priorityOverlayCollapsed && (
-                  <div className="max-h-[calc(100dvh-220px)] space-y-2.5 overflow-y-auto pr-0.5">
+                  <div className="mt-1.5 max-h-[calc(100dvh-250px)] space-y-2.5 overflow-y-auto pr-0.5">
                     <PriorityList
                       hotspots={priorities}
                       selectedId={selectedId}
@@ -847,7 +906,7 @@ export function MonitorDashboard({
             </div>
 
             {/* BOTTOM-LEFT MAP OVERLAY: Basemap Switcher + DINOv3 BurnSeg Telemetry Pill */}
-            <div className="pointer-events-none absolute bottom-2.5 left-2.5 z-[900] flex flex-wrap items-center gap-1.5">
+            <div className="pointer-events-none absolute bottom-2 left-2 sm:bottom-2.5 sm:left-2.5 z-[900] flex flex-wrap items-center gap-1.5 max-w-[calc(100vw-16px)]">
               {/* Basemap Switcher */}
               <div className="pointer-events-auto flex items-center rounded-lg border border-slate-300/80 bg-white/90 p-0.5 text-[10px] shadow-md backdrop-blur-md">
                 {(
@@ -863,7 +922,7 @@ export function MonitorDashboard({
                     type="button"
                     onClick={() => setBasemap(bm.id)}
                     className={cn(
-                      "cursor-pointer rounded px-2 py-0.5 font-mono font-semibold transition-colors",
+                      "cursor-pointer rounded px-1.5 sm:px-2 py-0.5 font-mono font-semibold transition-colors",
                       basemap === bm.id
                         ? "bg-sigap-cobalt text-white"
                         : "text-slate-600 hover:text-slate-900"
@@ -900,20 +959,20 @@ export function MonitorDashboard({
             </div>
           </div>
 
-          {/* COLLAPSIBLE BOTTOM DRAWER (PRIORITY MATRIX / SATELLITE SLIDER / REPORTS) */}
+          {/* COLLAPSIBLE BOTTOM DRAWER (PRIORITY MATRIX / REPORTS) */}
           {drawerTab !== "none" && (
-            <section className="relative z-[950] flex h-[240px] xl:h-[260px] shrink-0 flex-col border-t border-slate-300 bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+            <section className="relative z-[950] flex h-[210px] sm:h-[240px] xl:h-[260px] shrink-0 flex-col border-t border-slate-300 bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
               {/* Drawer Header Bar */}
-              <div className="flex h-9 shrink-0 items-center justify-between border-b border-slate-200 bg-slate-100 px-3">
-                <div className="flex items-center gap-2">
+              <div className="flex h-auto min-h-9 shrink-0 flex-wrap items-center justify-between gap-1 border-b border-slate-200 bg-slate-100 px-2 sm:px-3 py-1">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
                   {drawerTab === "priority" && (
                     <>
-                      <ShieldCheck className="size-4 text-amber-700" />
-                      <h3 className="font-mono text-xs font-bold text-slate-900">
-                        Matriks Penilaian Prioritas Intervensi (MCDA)
+                      <ShieldCheck className="size-3.5 sm:size-4 text-amber-700 shrink-0" />
+                      <h3 className="font-mono text-[11px] sm:text-xs font-bold text-slate-900 truncate">
+                        Matriks Prioritas (MCDA)
                       </h3>
-                      <div className="ml-2 flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px]">
-                        <Filter className="size-3 text-slate-500" />
+                      <div className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] sm:text-[11px]">
+                        <Filter className="size-3 text-slate-500 shrink-0" />
                         <select
                           value={criteriaFilter}
                           onChange={(e) => setCriteriaFilter(e.target.value as CriteriaFilter)}
@@ -937,40 +996,28 @@ export function MonitorDashboard({
                     </>
                   )}
 
-                  {drawerTab === "imagery" && (
-                    <>
-                      <Sliders className="size-4 text-amber-700" />
-                      <h3 className="font-mono text-xs font-bold text-slate-900">
-                        Komparasi Satelit Pra & Pasca Kebakaran — {focusTarget?.id} ({focusTarget?.location.split(",")[0]})
-                      </h3>
-                      <span className="font-mono text-[10px] text-slate-500">
-                        ({focusTarget?.lat.toFixed(3)}°, {focusTarget?.lon.toFixed(3)}°)
-                      </span>
-                    </>
-                  )}
-
                   {drawerTab === "reports" && (
                     <>
-                      <FileText className="size-4 text-amber-700" />
-                      <h3 className="font-mono text-xs font-bold text-slate-900">
-                        Laporan & Riwayat Kasus Investigasi
+                      <FileText className="size-3.5 sm:size-4 text-amber-700 shrink-0" />
+                      <h3 className="font-mono text-[11px] sm:text-xs font-bold text-slate-900 truncate">
+                        Laporan & Riwayat Kasus
                       </h3>
-                      <div className="relative ml-2 w-48">
+                      <div className="relative w-32 sm:w-48">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-slate-400" />
                         <input
                           type="text"
                           value={reportSearch}
                           onChange={(e) => setReportSearch(e.target.value)}
                           placeholder="Cari kasus / wilayah..."
-                          className="h-6 w-full rounded-md border border-slate-300 bg-white pl-6 pr-2 text-[11px] focus:border-amber-500 focus:outline-none"
+                          className="h-6 w-full rounded-md border border-slate-300 bg-white pl-6 pr-2 text-[10px] sm:text-[11px] focus:border-amber-500 focus:outline-none"
                         />
                       </div>
                       <select
                         value={reportStatusFilter}
                         onChange={(e) => setReportStatusFilter(e.target.value)}
-                        className="h-6 rounded-md border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-700 focus:outline-none"
+                        className="h-6 rounded-md border border-slate-300 bg-white px-1.5 text-[10px] sm:text-[11px] font-medium text-slate-700 focus:outline-none"
                       >
-                        <option value="all">Semua Status</option>
+                        <option value="all">Semua</option>
                         <option value="Selesai">Selesai</option>
                         <option value="Draft">Draft</option>
                         <option value="Ditinjau">Ditinjau</option>
@@ -982,18 +1029,18 @@ export function MonitorDashboard({
                 <button
                   type="button"
                   onClick={() => setDrawerTab("none")}
-                  className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200"
+                  className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200 shrink-0"
                 >
-                  <span>Tutup</span>
+                  <span className="hidden sm:inline">Tutup</span>
                   <X className="size-3.5" />
                 </button>
               </div>
 
               {/* Drawer Body */}
-              <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
+              <div className="min-h-0 flex-1 overflow-auto p-2 sm:p-2.5">
                 {/* TAB 1: PRIORITY MATRIX */}
                 {drawerTab === "priority" && (
-                  <table className="w-full text-left text-[11px]">
+                  <table className="w-full min-w-[540px] text-left text-[11px]">
                     <thead className="sticky top-0 bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600">
                       <tr>
                         <th className="py-1.5 px-2 w-8"></th>
@@ -1128,87 +1175,9 @@ export function MonitorDashboard({
                   </table>
                 )}
 
-                {/* TAB 2: SATELLITE BEFORE/AFTER COMPARISON SLIDER */}
-                {drawerTab === "imagery" && (
-                  <div className="flex h-full flex-col gap-2">
-                    <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-300 bg-slate-900 select-none">
-                      {/* Post-Fire Base */}
-                      <div className="absolute inset-0 grid grid-cols-3 grid-rows-2">
-                        {tileGrid.map((t) => (
-                          <div key={`post-${t.key}`} className="relative size-full overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={t.postUrl} alt="" className="size-full object-cover brightness-95 contrast-125" />
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={t.postSwirUrl}
-                              alt=""
-                              className="absolute inset-0 size-full object-cover mix-blend-screen opacity-65"
-                            />
-                          </div>
-                        ))}
-                        <div
-                          className="pointer-events-none absolute inset-0"
-                          style={{
-                            background:
-                              "radial-gradient(circle at 50% 50%, rgba(239,68,68,0.5) 0%, rgba(249,115,22,0.3) 25%, transparent 65%)",
-                          }}
-                        />
-                      </div>
-
-                      {/* Pre-Fire Clipped */}
-                      <div
-                        className="absolute inset-0 overflow-hidden"
-                        style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
-                      >
-                        <div className="grid size-full grid-cols-3 grid-rows-2">
-                          {tileGrid.map((t) => (
-                            <div key={`pre-${t.key}`} className="relative size-full overflow-hidden">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={t.preUrl} alt="" className="size-full object-cover saturate-110" />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Badges */}
-                      <div className="pointer-events-none absolute left-2 top-2 z-10 inline-flex items-center gap-1 rounded bg-emerald-950/85 px-2 py-0.5 text-[10px] font-semibold text-emerald-200 border border-emerald-400/40">
-                        <Calendar className="size-2.5" />
-                        <span>PRA: {imageryMeta?.pre_fire.date ?? "2026-10-02"} (Sentinel-2 L2A • Awan {imageryMeta?.pre_fire.cloud_cover_percentage ?? 4.2}%)</span>
-                      </div>
-                      <div className="pointer-events-none absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded bg-rose-950/85 px-2 py-0.5 text-[10px] font-semibold text-rose-200 border border-rose-400/40">
-                        <Calendar className="size-2.5" />
-                        <span>PASCA: {imageryMeta?.post_fire.date ?? "2026-10-20"} (VIIRS SWIR + DINOv3 {totalHa} Ha)</span>
-                      </div>
-
-                      {/* Divider */}
-                      <div
-                        className="pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.9)]"
-                        style={{ left: `${sliderPosition}%` }}
-                      >
-                        <div className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 flex size-6 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-slate-950 shadow">
-                          ↔
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="text-[10px] font-semibold text-emerald-700">Pra-Kebakaran</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={sliderPosition}
-                        onChange={(e) => setSliderPosition(Number(e.target.value))}
-                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-lg bg-slate-200 accent-amber-500"
-                      />
-                      <span className="text-[10px] font-semibold text-rose-700">Pasca-Kebakaran</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB 3: REPORTS & CASE HISTORY */}
+                {/* TAB 2: REPORTS & CASE HISTORY */}
                 {drawerTab === "reports" && (
-                  <table className="w-full text-left text-[11px]">
+                  <table className="w-full min-w-[520px] text-left text-[11px]">
                     <thead className="sticky top-0 bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600">
                       <tr>
                         <th className="py-1.5 px-2">ID Kasus</th>
@@ -1285,7 +1254,16 @@ export function MonitorDashboard({
         </div>
 
         {/* RIGHT COLUMN: ALWAYS-VISIBLE AI INVESTIGATION CHAT & AGENT EXECUTION TRACE */}
-        <aside className="flex h-[45dvh] lg:h-full w-full lg:w-[400px] xl:w-[440px] 2xl:w-[480px] shrink-0 flex-col border-t lg:border-t-0 lg:border-l border-slate-300 bg-white overflow-hidden">
+        <aside
+          className={cn(
+            "w-full lg:w-[400px] xl:w-[440px] 2xl:w-[480px] shrink-0 flex-col border-t lg:border-t-0 lg:border-l border-slate-300 bg-white overflow-hidden",
+            mobileView === "map"
+              ? "hidden lg:flex lg:h-full"
+              : mobileView === "chat"
+                ? "flex flex-1 lg:h-full"
+                : "flex h-[45dvh] lg:h-full"
+          )}
+        >
           {/* Compact Chat Header */}
           <div className="flex h-10 shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-3">
             <div className="flex items-center gap-2 min-w-0">

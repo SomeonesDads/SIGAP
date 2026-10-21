@@ -108,7 +108,7 @@ function SelectedCard({
   return (
     <div
       ref={ref}
-      className="pointer-events-auto absolute bottom-3 left-3 z-[650]"
+      className="pointer-events-auto absolute bottom-12 left-2.5 sm:bottom-14 sm:left-3 z-[920] max-w-[calc(100vw-20px)]"
     >
       <HotspotCard
         hotspot={hotspot}

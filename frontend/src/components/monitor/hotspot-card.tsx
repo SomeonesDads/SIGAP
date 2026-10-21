@@ -29,7 +29,7 @@ export function HotspotCard({ hotspot, priorityRank, onInvestigate, onClose }: H
   const env = getHotspotEnvironment(hotspot);
 
   return (
-    <div className="relative w-[244px] rounded-xl border border-slate-300 bg-white/95 p-2.5 text-slate-900 shadow-xl backdrop-blur-md">
+    <div className="relative w-[min(244px,calc(100vw-20px))] rounded-xl border border-slate-300 bg-white/95 p-2.5 text-slate-900 shadow-xl backdrop-blur-md">
       <div className="flex items-center justify-between gap-1 border-b border-slate-200 pb-1.5">
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-xs font-bold">{hotspot.id}</span>
@@ -81,9 +81,6 @@ export function HotspotCard({ hotspot, priorityRank, onInvestigate, onClose }: H
           </button>
         )}
       </div>
-
-      {/* Bottom pointer triangle */}
-      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-b border-r border-slate-300 bg-white" />
     </div>
   );
 }
