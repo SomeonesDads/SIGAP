@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Compass, Loader2, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildDinov3CoverageRings, type Hotspot } from "@/lib/monitoring";
 import type {
   RawHotspotPoint,
   SegmentationResponse,
@@ -18,19 +19,21 @@ interface MapContainerProps {
   interactive?: boolean;
   title?: string;
   hotspots?: RawHotspotPoint[];
+  clusters?: Hotspot[];
   segmentation?: SegmentationResponse | null;
   spatialContext?: SpatialContextResponse | null;
 }
 
 export function MapContainer({
-  center = [-2.9812, 114.1205],
-  zoom = 10,
+  center = [-2.2, 118.0],
+  zoom = 5,
   className,
   height = "h-[450px]",
   activeLayers = ["Titik Panas (Hotspot)", "Segmentasi DINOv3 BurnSeg", "dNBR (Burn Severity)"],
   interactive = true,
   title,
   hotspots = [],
+  clusters = [],
   segmentation = null,
   spatialContext = null,
 }: MapContainerProps) {
@@ -38,8 +41,14 @@ export function MapContainer({
   const mapInstanceRef = useRef<any>(null);
   const layersGroupRef = useRef<any>({});
   const tileLayerRef = useRef<any>(null);
+  const prevViewRef = useRef<{ lat: number; lon: number; zoom: number }>({
+    lat: center[0],
+    lon: center[1],
+    zoom,
+  });
   const [isClient, setIsClient] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [mapZoom, setMapZoom] = useState<number>(zoom);
   const [basemap, setBasemap] = useState<"satellite" | "roadmap" | "terrain">("satellite");
 
   const BASEMAP_TILES = {
@@ -87,11 +96,15 @@ export function MapContainer({
         const map = L.map(mapContainerRef.current, {
           center: center,
           zoom: zoom,
+          minZoom: 4,
           zoomControl: false,
           attributionControl: false,
         });
 
         mapInstanceRef.current = map;
+        map.on("zoomend", () => {
+          if (isMounted) setMapZoom(map.getZoom());
+        });
 
         const initialCfg = BASEMAP_TILES[basemap];
         const tileLayer = L.tileLayer(initialCfg.url, {
@@ -106,11 +119,11 @@ export function MapContainer({
           .addTo(map);
 
         const groups: Record<string, any> = {
-          hotspots: L.layerGroup(),
           segmentation: L.layerGroup(),
           dnbr: L.layerGroup(),
           peatland: L.layerGroup(),
           settlement: L.layerGroup(),
+          hotspots: L.layerGroup(),
         };
 
         layersGroupRef.current = groups;
@@ -150,13 +163,22 @@ export function MapContainer({
     };
   }, [isClient]);
 
-  // Fly to new center/zoom when selected region changes
+  // Fly to new center/zoom ONLY when the user explicitly selects a different region
   useEffect(() => {
     if (!mapInstanceRef.current) return;
-    mapInstanceRef.current.flyTo(center, zoom, { duration: 0.9 });
+    const prev = prevViewRef.current;
+    if (
+      Math.abs(prev.lat - center[0]) > 0.0001 ||
+      Math.abs(prev.lon - center[1]) > 0.0001 ||
+      prev.zoom !== zoom
+    ) {
+      prevViewRef.current = { lat: center[0], lon: center[1], zoom };
+      mapInstanceRef.current.flyTo(center, zoom, { duration: 0.9 });
+      setMapZoom(zoom);
+    }
   }, [center[0], center[1], zoom]);
 
-  // Populate & update spatial layers dynamically when live data arrives
+  // Populate & update spatial layers dynamically when live data or zoom changes
   useEffect(() => {
     if (!isClient || !mapInstanceRef.current || !layersGroupRef.current) return;
 
@@ -171,40 +193,53 @@ export function MapContainer({
       groups.peatland.clearLayers();
       groups.settlement.clearLayers();
 
-      // 1. LIVE FIRMS HOTSPOTS LAYER
-      hotspots.forEach((hs, idx) => {
-        const frp = Number(hs.frp ?? 15.0);
-        const marker = L.circleMarker([hs.latitude, hs.longitude], {
-          radius: Math.min(13, Math.max(5.5, frp / 6.5)),
-          fillColor: frp >= 45 ? "#ef4444" : frp >= 20 ? "#f97316" : "#f59e0b",
-          color: "#ffffff",
-          weight: 1.5,
-          opacity: 0.95,
-          fillOpacity: 0.88,
-        });
-
-        const timeFormatted = hs.acq_time && hs.acq_time.length >= 4
-          ? `${hs.acq_time.slice(0, 2)}:${hs.acq_time.slice(2, 4)} UTC`
-          : hs.acq_time;
-
-        marker.bindPopup(`
-          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
-            <div style="font-weight: 700; color: #b91c1c; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-              🔥 Live FIRMS Hotspot #${idx + 1}
+      // 1. DINOV3 MULTI-RING COVERED AREA OVERLAYS ACROSS ALL ACTIVE INDONESIA CLUSTERS
+      // (Rendered outermost Yellowish -> Amber-Orange -> Red-Orange -> Deep Red core)
+      clusters.forEach((c) => {
+        const rings = buildDinov3CoverageRings(c, mapZoom);
+        rings.forEach((ring) => {
+          const poly = L.polygon(ring.positions, {
+            color: ring.strokeColor,
+            weight: ring.weight,
+            fillColor: ring.fillColor,
+            fillOpacity: ring.fillOpacity,
+            dashArray: ring.dashArray,
+          });
+          const badge =
+            ring.tier === "CORE_DEEPRED"
+              ? "🟥"
+              : ring.tier === "INNER_ORANGE"
+              ? "🟧"
+              : ring.tier === "MID_AMBER"
+              ? "🟠"
+              : "🟨";
+          poly.bindPopup(`
+            <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+              <div style="font-weight: 700; color: ${ring.strokeColor}; margin-bottom: 4px;">
+                ${badge} ${ring.label}
+              </div>
+              <div><b>Klaster:</b> ${c.id} — ${c.location}</div>
+              <div><b>Wilayah:</b> ${c.district ?? "Indonesia"}</div>
+              <div><b>Radius Fisik Zona:</b> ${ring.radiusKm} km</div>
+              <div><b>Estimasi Luas Terbakar:</b> ${c.areaHa} Ha (dNBR ${c.dnbrMean})</div>
+              <div><b>Titik Panas Klaster:</b> ${c.hotspotCount ?? 1} titik (FRP ${c.totalFrp ?? 25} MW)</div>
             </div>
-            <div><b>Radiasi Termal (FRP):</b> ${frp.toFixed(1)} MW</div>
-            <div><b>Keyakinan:</b> ${hs.confidence.toUpperCase()}</div>
-            <div><b>Waktu Akuisisi:</b> ${hs.acq_date} ${timeFormatted}</div>
-            <div><b>Sensor Satelit:</b> ${hs.satellite}</div>
-            ${hs.brightness ? `<div><b>Suhu Kecerahan:</b> ${hs.brightness.toFixed(1)} K</div>` : ""}
-            <div><b>Koordinat:</b> ${hs.latitude.toFixed(4)}°, ${hs.longitude.toFixed(4)}°</div>
-          </div>
-        `);
-
-        marker.addTo(groups.hotspots);
+          `);
+          poly.addTo(groups.segmentation);
+          if (ring.tier === "CORE_DEEPRED" || ring.tier === "INNER_ORANGE") {
+            const dnbrClone = L.polygon(ring.positions, {
+              color: ring.strokeColor,
+              weight: ring.weight,
+              fillColor: ring.fillColor,
+              fillOpacity: ring.fillOpacity,
+            });
+            dnbrClone.bindPopup(poly.getPopup()!);
+            dnbrClone.addTo(groups.dnbr);
+          }
+        });
       });
 
-      // 2. DINOV3 BURNSEG & dNBR DYNAMIC GEOJSON POLYGONS
+      // 2. DETAILED DINOV3 BURNSEG GEOJSON POLYGONS FROM BACKEND INFERENCE
       if (segmentation?.geojson?.features) {
         segmentation.geojson.features.forEach((feat) => {
           const props = feat.properties || {};
@@ -215,13 +250,15 @@ export function MapContainer({
 
           const style =
             tier === "HIGH"
-              ? { color: "#dc2626", weight: 2.5, fillColor: "#ef4444", fillOpacity: 0.56 }
+              ? { color: "#7f1d1d", weight: 2.2, fillColor: "#991b1b", fillOpacity: 0.72 }
               : tier === "MODERATE"
-              ? { color: "#ea580c", weight: 2, fillColor: "#f97316", fillOpacity: 0.40 }
-              : { color: "#eab308", weight: 2, fillColor: "#facc15", fillOpacity: 0.26, dashArray: "5, 5" };
+              ? { color: "#dc2626", weight: 1.8, fillColor: "#ef4444", fillOpacity: 0.52 }
+              : tier === "MODERATE_LOW"
+              ? { color: "#f97316", weight: 1.5, fillColor: "#fb923c", fillOpacity: 0.38 }
+              : { color: "#eab308", weight: 1.4, fillColor: "#fde047", fillOpacity: 0.28, dashArray: "5, 5" };
 
           const poly = L.polygon(latLngs, style);
-          const badge = tier === "HIGH" ? "🟥" : tier === "MODERATE" ? "🟧" : "🟨";
+          const badge = tier === "HIGH" ? "🟥" : tier === "MODERATE" ? "🟧" : tier === "MODERATE_LOW" ? "🟠" : "🟨";
 
           poly.bindPopup(`
             <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
@@ -244,6 +281,39 @@ export function MapContainer({
           }
         });
       }
+
+      // 3. LIVE FIRMS HOTSPOTS LAYER (rendered on top of DINOv3 coverage polygons)
+      hotspots.forEach((hs, idx) => {
+        const frp = Number(hs.frp ?? 15.0);
+        const marker = L.circleMarker([hs.latitude, hs.longitude], {
+          radius: Math.min(11, Math.max(4.5, frp / 7.5)),
+          fillColor: frp >= 45 ? "#7f1d1d" : frp >= 20 ? "#dc2626" : "#f59e0b",
+          color: "#ffffff",
+          weight: 1.3,
+          opacity: 0.95,
+          fillOpacity: 0.90,
+        });
+
+        const timeFormatted = hs.acq_time && hs.acq_time.length >= 4
+          ? `${hs.acq_time.slice(0, 2)}:${hs.acq_time.slice(2, 4)} UTC`
+          : hs.acq_time;
+
+        marker.bindPopup(`
+          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+            <div style="font-weight: 700; color: #b91c1c; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+              🔥 Live FIRMS Hotspot #${idx + 1}
+            </div>
+            <div><b>Radiasi Termal (FRP):</b> ${frp.toFixed(1)} MW</div>
+            <div><b>Keyakinan:</b> ${hs.confidence.toUpperCase()}</div>
+            <div><b>Waktu Akuisisi:</b> ${hs.acq_date} ${timeFormatted}</div>
+            <div><b>Sensor Satelit:</b> ${hs.satellite}</div>
+            ${hs.brightness ? `<div><b>Suhu Kecerahan:</b> ${hs.brightness.toFixed(1)} K</div>` : ""}
+            <div><b>Koordinat:</b> ${hs.latitude.toFixed(4)}°, ${hs.longitude.toFixed(4)}°</div>
+          </div>
+        `);
+
+        marker.addTo(groups.hotspots);
+      });
 
       // 3. LIVE PEATLAND / WETLAND POLYGONS (OSM Overpass / KHG)
       if (spatialContext?.peatland_polygons) {
@@ -315,7 +385,7 @@ export function MapContainer({
     }
 
     renderLiveLayers();
-  }, [isClient, hotspots, segmentation, spatialContext]);
+  }, [isClient, hotspots, clusters, segmentation, spatialContext, mapZoom]);
 
   // Handle Layer Toggle dynamically
   useEffect(() => {

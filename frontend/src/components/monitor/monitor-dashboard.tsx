@@ -52,8 +52,11 @@ export function MonitorDashboard() {
     const loadLive = async () => {
       const data = await fetchMonitoringHotspots("Indonesia", 35);
       if (!active) return;
-      setHotspots(data.hotspots);
-      setIsLiveFeed(data.is_live);
+      setHotspots((prev) => {
+        if (!data.is_live && prev.some((h) => h.isLive)) return prev;
+        return data.hotspots;
+      });
+      setIsLiveFeed((prev) => prev || data.is_live);
     };
     loadLive();
     const pollTimer = setInterval(loadLive, LIVE_REFRESH_MS);

@@ -108,22 +108,21 @@ export function FireMapView() {
   const [sliderPosition, setSliderPosition] = useState(50);
   const [liveClusters, setLiveClusters] = useState<Hotspot[]>(SAMPLE_HOTSPOTS);
   const [isLiveFeed, setIsLiveFeed] = useState(false);
-  const [selectedKey, setSelectedKey] = useState<string>("cluster-0");
+  const [selectedKey, setSelectedKey] = useState<string>("indonesia-all");
 
   const [rawHotspots, setRawHotspots] = useState<RawHotspotPoint[]>([]);
   const [segmentation, setSegmentation] = useState<SegmentationResponse | null>(null);
   const [spatialContext, setSpatialContext] = useState<SpatialContextResponse | null>(null);
   const [imageryMeta, setImageryMeta] = useState<ImageryMetadataResponse | null>(null);
 
-  // 1. Load live FIRMS monitoring clusters across all of Indonesia for dynamic region selector
+  // 1. Load live FIRMS monitoring clusters across all of Indonesia without resetting user's selected view
   useEffect(() => {
     let active = true;
-    fetchMonitoringHotspots("Indonesia", 25).then((res) => {
+    fetchMonitoringHotspots("Indonesia", 35).then((res) => {
       if (!active) return;
       if (res.hotspots.length > 0) {
         setLiveClusters(res.hotspots);
         setIsLiveFeed(res.is_live);
-        setSelectedKey("cluster-0");
       }
     });
     return () => {
@@ -131,9 +130,21 @@ export function FireMapView() {
     };
   }, []);
 
-  // Build dynamic region dropdown options from live clusters + named places
+  // Build dynamic region dropdown options with "Seluruh Indonesia" first so the map frames all of Indonesia by default
   const regionOptions = useMemo<RegionOption[]>(() => {
-    const clusterOpts: RegionOption[] = liveClusters.slice(0, 18).map((c, idx) => {
+    const indonesiaOverview: RegionOption = {
+      key: "indonesia-all",
+      label: "Seluruh Indonesia — Cakupan Nasional (Sabang s/d Merauke)",
+      center: [-2.2, 118.0],
+      zoom: 5,
+      regionQuery: "Indonesia",
+      scaleFactor: 1.5,
+      acqDate: liveClusters[0]?.acqDate,
+      hotspotCount: liveClusters.reduce((acc, c) => acc + (c.hotspotCount ?? 1), 0),
+      totalFrp: liveClusters.reduce((acc, c) => acc + (c.totalFrp ?? 25), 0),
+    };
+
+    const clusterOpts: RegionOption[] = liveClusters.slice(0, 20).map((c, idx) => {
       const count = c.hotspotCount ?? 1;
       const frp = c.totalFrp ?? 35;
       const scale = Math.min(2.4, Math.max(0.7, 0.75 + Math.log10(Math.max(1, count)) * 0.55));
@@ -142,7 +153,7 @@ export function FireMapView() {
         key: `cluster-${idx}`,
         label: `${c.id}: ${c.location.split(",")[0]} (${count} titik • ${c.district ?? "Indonesia"})`,
         center: [c.lat, c.lon],
-        zoom: 12,
+        zoom: 11,
         regionQuery: bboxQuery,
         scaleFactor: Number(scale.toFixed(2)),
         acqDate: c.acqDate,
@@ -151,29 +162,22 @@ export function FireMapView() {
       };
     });
 
-    const placeOpts: RegionOption[] = PLACES.map((p) => ({
+    const placeOpts: RegionOption[] = PLACES.filter((p) => p.name !== "Indonesia").map((p) => ({
       key: `place-${p.name}`,
       label: `Wilayah: ${p.name}`,
       center: [p.lat, p.lon],
-      zoom: Math.max(10, p.zoom),
-      regionQuery: `${(p.lon - 2.5).toFixed(2)},${(p.lat - 2.5).toFixed(2)},${(p.lon + 2.5).toFixed(2)},${(p.lat + 2.5).toFixed(2)}`,
-      scaleFactor: 1.0,
+      zoom: Math.max(7, p.zoom),
+      regionQuery: `${(p.lon - 3.0).toFixed(2)},${(p.lat - 3.0).toFixed(2)},${(p.lon + 3.0).toFixed(2)},${(p.lat + 3.0).toFixed(2)}`,
+      scaleFactor: 1.2,
     }));
 
-    return [...clusterOpts, ...placeOpts];
+    return [indonesiaOverview, ...clusterOpts, ...placeOpts];
   }, [liveClusters]);
 
   const currentRegionConfig = useMemo<RegionOption>(() => {
     return (
       regionOptions.find((r) => r.key === selectedKey) ??
-      regionOptions[0] ?? {
-        key: "default",
-        label: "Pulang Pisau, Kalteng",
-        center: [-2.9812, 114.1205],
-        zoom: 11,
-        regionQuery: "Indonesia",
-        scaleFactor: 1.0,
-      }
+      regionOptions[0]
     );
   }, [regionOptions, selectedKey]);
 
@@ -181,22 +185,29 @@ export function FireMapView() {
   useEffect(() => {
     let active = true;
     const [lat, lon] = currentRegionConfig.center;
+    const isNational = currentRegionConfig.key === "indonesia-all";
+    const focusLat = isNational ? (liveClusters[0]?.lat ?? -2.85) : lat;
+    const focusLon = isNational ? (liveClusters[0]?.lon ?? 114.12) : lon;
 
     Promise.all([
-      fetchRawHotspots(currentRegionConfig.regionQuery, 300),
-      fetchSegmentationData(lat, lon, currentRegionConfig.scaleFactor),
-      fetchSpatialContext(lat, lon),
-      fetchImageryMetadata(currentRegionConfig.acqDate, lat, lon),
+      fetchRawHotspots(currentRegionConfig.regionQuery, isNational ? 350 : 250),
+      fetchSegmentationData(focusLat, focusLon, currentRegionConfig.scaleFactor),
+      fetchSpatialContext(focusLat, focusLon),
+      fetchImageryMetadata(currentRegionConfig.acqDate, focusLat, focusLon),
     ]).then(([pts, seg, ctx, img]) => {
       if (!active) return;
 
-      // Filter raw FIRMS points near the current view or sort by proximity so nearby detections are always shown
-      const sortedByDist = [...pts].sort((a, b) => {
-        const da = Math.hypot(a.latitude - lat, a.longitude - lon);
-        const db = Math.hypot(b.latitude - lat, b.longitude - lon);
-        return da - db;
-      });
-      setRawHotspots(sortedByDist.slice(0, 80));
+      if (isNational) {
+        // Keep spatially diversified hotspots across the entire Indonesian archipelago
+        setRawHotspots(pts);
+      } else {
+        const sortedByDist = [...pts].sort((a, b) => {
+          const da = Math.hypot(a.latitude - lat, a.longitude - lon);
+          const db = Math.hypot(b.latitude - lat, b.longitude - lon);
+          return da - db;
+        });
+        setRawHotspots(sortedByDist.slice(0, 120));
+      }
       setSegmentation(seg);
       setSpatialContext(ctx);
       setImageryMeta(img);
@@ -206,6 +217,7 @@ export function FireMapView() {
       active = false;
     };
   }, [
+    currentRegionConfig.key,
     currentRegionConfig.center[0],
     currentRegionConfig.center[1],
     currentRegionConfig.regionQuery,
@@ -517,6 +529,7 @@ export function FireMapView() {
             title={`Analisis Spasial: ${currentRegionConfig.label}`}
             activeLayers={activeLayerNames}
             hotspots={rawHotspots}
+            clusters={liveClusters}
             segmentation={segmentation}
             spatialContext={spatialContext}
           />

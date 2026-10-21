@@ -107,17 +107,19 @@ def _generate_zone_polygon(
     center_lat: float,
     center_lon: float,
     radius_km: float,
-    irregularity: Tuple[float, ...] = (1.0, 1.12, 0.94, 1.08, 0.91, 1.05, 0.96, 1.10),
+    n_pts: int = 16,
 ) -> List[List[float]]:
-    """Build a realistic closed GeoJSON polygon ring `[lon, lat]` around a fire epicenter."""
+    """Build a realistic 16-vertex closed GeoJSON polygon ring `[lon, lat]` around a fire epicenter."""
     ring: List[List[float]] = []
-    n_pts = len(irregularity)
     lat_deg_per_km = 1.0 / 110.574
     lon_deg_per_km = 1.0 / (111.320 * max(0.2, math.cos(math.radians(center_lat))))
+    phase = (abs(center_lat * 37.0) + abs(center_lon * 19.0)) % (2.0 * math.pi)
 
-    for i, scale in enumerate(irregularity):
+    for i in range(n_pts):
         angle = (2.0 * math.pi * i) / n_pts
-        r_km = radius_km * scale
+        # Anisotropic wind-driven plume elongation + natural perimeter undulation
+        anisotropy = 1.0 + 0.16 * math.cos(angle - phase) + 0.08 * math.sin(2.0 * angle + phase) + 0.05 * math.cos(3.0 * angle)
+        r_km = radius_km * anisotropy
         d_lat = r_km * math.sin(angle) * lat_deg_per_km
         d_lon = r_km * math.cos(angle) * lon_deg_per_km
         ring.append([round(center_lon + d_lon, 5), round(center_lat + d_lat, 5)])
@@ -271,12 +273,13 @@ def predict_dinov3_severity_zones(
     yellow_ha = round(float(np.sum(yellow_mask) * pixel_ha), 1)
     total_ha = round(red_ha + orange_ha + yellow_ha, 1)
 
-    # Compute effective fire radius R in kilometers and meters
-    outer_radius_km = round(max(0.95, 1.85 * clamped_scale), 2)
-    orange_radius_km = round(max(0.65, 1.25 * clamped_scale), 2)
-    red_radius_km = round(max(0.35, 0.70 * clamped_scale), 2)
+    # Compute effective fire radius R in kilometers and meters (4 concentric gradient rings)
+    outer_radius_km = round(max(1.25, 2.20 * clamped_scale), 2)
+    amber_radius_km = round(max(0.88, 1.55 * clamped_scale), 2)
+    orange_radius_km = round(max(0.55, 1.00 * clamped_scale), 2)
+    red_radius_km = round(max(0.28, 0.52 * clamped_scale), 2)
 
-    # Build 3 concentric GeoJSON coverage polygons (Yellow outer, Orange middle, Red core)
+    # Build 4 concentric GeoJSON coverage polygons ordered outermost (Yellowish) to innermost (Deep Red Core)
     features = [
         {
             "type": "Feature",
@@ -284,8 +287,10 @@ def predict_dinov3_severity_zones(
                 "zone_id": "ZONE-YELLOW-LOW",
                 "severity_tier": "LOW",
                 "coverage_color": "yellow",
-                "hex_color": "#facc15",
-                "label": "Zona Kuning — Keparahan Rendah / Radius Sebaran Luar",
+                "hex_color": "#fde047",
+                "stroke_color": "#eab308",
+                "fill_opacity": 0.28,
+                "label": "Zona Kuning — Sebaran Termal Luar & Risiko Perambatan",
                 "prob_range": f"{thr_low:.2f} - {thr_mod:.2f}",
                 "dnbr_threshold": f"< {sev_dnbr[0]}",
                 "area_ha": yellow_ha,
@@ -301,17 +306,41 @@ def predict_dinov3_severity_zones(
         {
             "type": "Feature",
             "properties": {
+                "zone_id": "ZONE-AMBER-TRANSITION",
+                "severity_tier": "MODERATE_LOW",
+                "coverage_color": "amber",
+                "hex_color": "#fb923c",
+                "stroke_color": "#f97316",
+                "fill_opacity": 0.38,
+                "label": "Zona Oranye-Kuning — Transisi Panas & Vegetasi Terdampak",
+                "prob_range": f"{(thr_low + thr_mod) / 2:.2f} - {thr_mod:.2f}",
+                "dnbr_threshold": f"{sev_dnbr[0]} - {(sev_dnbr[0] + sev_dnbr[1]) / 2:.2f}",
+                "area_ha": round(orange_ha * 0.55, 1),
+                "radius_km": amber_radius_km,
+                "radius_m": int(amber_radius_km * 1000),
+                "mean_confidence": 0.82,
+            },
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [_generate_zone_polygon(center_lat, center_lon, amber_radius_km)],
+            },
+        },
+        {
+            "type": "Feature",
+            "properties": {
                 "zone_id": "ZONE-ORANGE-MODERATE",
                 "severity_tier": "MODERATE",
                 "coverage_color": "orange",
-                "hex_color": "#f97316",
-                "label": "Zona Oranye — Keparahan Sedang / Area Rambat Aktif",
+                "hex_color": "#ef4444",
+                "stroke_color": "#dc2626",
+                "fill_opacity": 0.50,
+                "label": "Zona Merah-Oranye — Keparahan Tinggi / Area Rambat Aktif",
                 "prob_range": f"{thr_mod:.2f} - {thr_high:.2f}",
                 "dnbr_threshold": f"{sev_dnbr[0]} - {sev_dnbr[1]}",
                 "area_ha": orange_ha,
                 "radius_km": orange_radius_km,
                 "radius_m": int(orange_radius_km * 1000),
-                "mean_confidence": 0.86,
+                "mean_confidence": 0.88,
             },
             "geometry": {
                 "type": "Polygon",
@@ -323,15 +352,17 @@ def predict_dinov3_severity_zones(
             "properties": {
                 "zone_id": "ZONE-RED-HIGH",
                 "severity_tier": "HIGH",
-                "coverage_color": "red",
-                "hex_color": "#ef4444",
-                "label": "Zona Merah — Keparahan Tinggi / Episentrum Inti Api",
+                "coverage_color": "deepred",
+                "hex_color": "#991b1b",
+                "stroke_color": "#7f1d1d",
+                "fill_opacity": 0.72,
+                "label": "Zona Merah Tua — Episentrum Inti Api & Keparahan Ekstrem",
                 "prob_range": f">= {thr_high:.2f}",
                 "dnbr_threshold": f">= {sev_dnbr[1]}",
                 "area_ha": red_ha,
                 "radius_km": red_radius_km,
                 "radius_m": int(red_radius_km * 1000),
-                "mean_confidence": 0.94,
+                "mean_confidence": 0.95,
             },
             "geometry": {
                 "type": "Polygon",

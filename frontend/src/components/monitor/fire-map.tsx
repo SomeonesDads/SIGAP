@@ -1,13 +1,18 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from "react-leaflet";
-import { SEVERITY_META, type Drone, type Hotspot } from "@/lib/monitoring";
+import { MapContainer, Marker, Polygon, Polyline, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import {
+  SEVERITY_META,
+  buildDinov3CoverageRings,
+  type Drone,
+  type Hotspot,
+} from "@/lib/monitoring";
 import { HOTSPOT_CARD_TIP, HotspotCard } from "@/components/monitor/hotspot-card";
 
-const INDONESIA_CENTER: L.LatLngTuple = [-2.2, 117.5];
+const INDONESIA_CENTER: L.LatLngTuple = [-2.2, 118.0];
 const SELECTED_SIZE = 50;
 
 function fireIcon(hotspot: Hotspot, selected: boolean): L.DivIcon {
@@ -70,10 +75,21 @@ function SelectedCard({ hotspot, rank }: { hotspot: Hotspot; rank: number }) {
   );
 }
 
-function MapBridge({ onReady, onBackgroundClick }: { onReady: (map: L.Map) => void; onBackgroundClick: () => void }) {
+function MapBridge({
+  onReady,
+  onBackgroundClick,
+  onZoomChange,
+}: {
+  onReady: (map: L.Map) => void;
+  onBackgroundClick: () => void;
+  onZoomChange: (zoom: number) => void;
+}) {
   const map = useMap();
   useEffect(() => onReady(map), [map, onReady]);
-  useMapEvents({ click: onBackgroundClick });
+  useMapEvents({
+    click: onBackgroundClick,
+    zoomend: () => onZoomChange(map.getZoom()),
+  });
   return null;
 }
 
@@ -98,6 +114,7 @@ export default function FireMap({
   activeDroneId,
   onSelectDrone,
 }: FireMapProps) {
+  const [mapZoom, setMapZoom] = useState(5);
   const selected = hotspots.find((h) => h.id === selectedId) ?? null;
   const hotspotById = useMemo(() => new Map(hotspots.map((h) => [h.id, h])), [hotspots]);
 
@@ -126,7 +143,39 @@ export default function FireMap({
         maxZoom={13}
       />
 
-      <MapBridge onReady={onReady} onBackgroundClick={() => onSelect(null)} />
+      <MapBridge
+        onReady={onReady}
+        onBackgroundClick={() => onSelect(null)}
+        onZoomChange={setMapZoom}
+      />
+
+      {/* DINOv3 BurnSeg Covered Area Overlays (Yellowish outer -> Amber-Orange -> Red-Orange -> Deep Red core) */}
+      {hotspots.map((h) => {
+        const rings = buildDinov3CoverageRings(h, mapZoom);
+        return (
+          <Fragment key={`${h.id}-dinov3`}>
+            {rings.map((ring) => (
+              <Polygon
+                key={`${h.id}-${ring.tier}`}
+                positions={ring.positions}
+                pathOptions={{
+                  color: ring.strokeColor,
+                  weight: h.id === selectedId ? ring.weight + 0.8 : ring.weight,
+                  fillColor: ring.fillColor,
+                  fillOpacity: h.id === selectedId ? Math.min(0.88, ring.fillOpacity + 0.12) : ring.fillOpacity,
+                  dashArray: ring.dashArray,
+                }}
+                eventHandlers={{
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    onSelect(h);
+                  },
+                }}
+              />
+            ))}
+          </Fragment>
+        );
+      })}
 
       {drones.map((d) => {
         const target = d.targetId ? hotspotById.get(d.targetId) : undefined;
