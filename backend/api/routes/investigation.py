@@ -23,6 +23,7 @@ service = InvestigationService()
 
 
 @router.post("/", response_model=InvestigationResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/start", response_model=InvestigationResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation(payload: InvestigationCreate) -> InvestigationResponse:
     """Create a new autonomous wildfire investigation."""
     return service.create(payload)

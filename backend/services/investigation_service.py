@@ -67,7 +67,7 @@ class InvestigationService:
         response = InvestigationResponse(
             id=investigation_id,
             status=InvestigationStatus.PENDING.value,
-            query=request.query,
+            query=request.get_query(),
             region=request.region or "Indonesia (Auto-detected)",
             created_at=now,
             updated_at=now,
