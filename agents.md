@@ -1,1075 +1,961 @@
-# Agen Karhutla — Agent Architecture
+# Agen Karhutla — Multi-Agent Architecture
 
 ## 1. Overview
 
-**SIGAP (Sistem Informasi dan Tanggap Cepat Karhutla / Agen Karhutla)** is an autonomous wildfire investigation and response prioritization platform engineered for Indonesian wildfire monitoring and disaster response agencies, including the Regional Disaster Management Agency (BPBD), Manggala Agni (Ministry of Environment and Forestry / KLHK), Forest Management Units (KPH), and specialized wildfire research analysts.
+**SIGAP (Sistem Informasi dan Tanggap Cepat Karhutla / Agen Karhutla)** is an enterprise multi-agent wildfire intelligence and automated response platform built for Indonesian disaster response authorities, specifically:
+- **BPBD (Badan Penanggulangan Bencana Daerah)** — Regional disaster management command centers managing emergency logistics and civil protection.
+- **Manggala Agni (KLHK)** — The specialized wildfire brigade under the Ministry of Environment and Forestry operating on the frontline of forest and peatland suppression.
+- **KPH (Kesatuan Pengelolaan Hutan)** — Forest Management Units overseeing regional concessions, conservation forests, and community boundaries.
+- **Remote Sensing & Fire Analysts** — GIS specialists evaluating burn scar perimeters, carbon emissions, and fire behavior.
 
-Wildfire investigation traditionally requires analysts to manually query thermal anomaly feeds, search satellite data catalogs, download heavy multi-spectral imagery, run localized deep learning segmentation or spectral index calculations, cross-reference peatland and settlement layers, and manually compile incident reports. This process takes hours to days—valuable time during which peatland fires can spread underground and become catastrophic.
-
-SIGAP replaces this manual bottleneck with an **Agentic AI architecture** driven by a centralized **LLM Orchestrator Agent**. Rather than executing a rigid, linear script or serving as a passive data dashboard, the agent acts as an autonomous analytical investigator: it interprets high-level natural language instructions, formulates a multi-step investigation plan, dynamically selects and invokes specialized tools, critically inspects intermediate findings, recovers autonomously from environmental hurdles (such as equatorial cloud cover), and synthesizes evidence-based recommendations.
+Rather than relying on legacy monolithic software or passive monitoring dashboards, SIGAP implements an advanced **multi-agent system** orchestrated using the **Google Agent Development Kit (ADK)** powered by **Gemini 3.5 Flash**. The system decomposes the complex, time-critical problem of wildfire management into **6 specialized sub-agents** coordinated by a central root agent (**Wildfire Response Orchestrator**).
 
 ```
-+-----------------------------------------------------------------------------------+
-|                            TRADITIONAL DASHBOARD vs. SIGAP                        |
-+-----------------------------------------------------------------------------------+
-| Feature                    | Traditional Dashboard     | SIGAP Agentic AI         |
-+----------------------------+---------------------------+--------------------------+
-| Workflow Execution         | Rigid, pre-programmed     | Autonomous planning &    |
-|                            | pipeline                  | dynamic step generation  |
-| Tool Selection             | Hardcoded triggers        | Context-aware tool calls |
-| Cloud Occlusion Handling   | Fails or returns blank    | Autonomous date/sensor   |
-|                            | imagery                   | fallback & compositing   |
-| Output Generation          | Raw charts & disconnected | Coherent investigation   |
-|                            | map layers                | report with explanations |
-| Reasoning & Transparency   | Black-box / manual user   | Traceable decision log & |
-|                            | interpretation            | "Why This Area?" scores  |
-+----------------------------+---------------------------+--------------------------+
++----------------------------------------------------------------------------------------------------+
+|                                    WORKFLOW COMPARISON ARCHITECTURE                                |
++----------------------------------------------------------------------------------------------------+
+| Dimension              | Traditional Rule-Based System             | SIGAP Multi-Agent System (ADK)        |
++------------------------+-------------------------------------------+---------------------------------------+
+| Architectural Model    | Linear, static, per-ticket pipeline       | Cyclic, adaptive, cross-ticket graph  |
+| Trigger & Perception   | Single raw hotspot triggers ticket        | Multi-sensor perception & fusion      |
+| Verification           | Manual human inspection or ignored        | Autonomous verification agent (VOI)   |
+| Risk Prioritization    | Static distance formula (Haversine)       | Dynamic contextual reasoning (MCDA)   |
+| Resource Allocation    | Greedy 1-to-1 dispatch (nearest crew)     | Many-to-many global optimization      |
+| Tactical Execution     | Broadcast SMS / static alert              | Two-way interactive field coordination|
+| Dynamic Disruption     | Stalls; requires manual dispatcher reset  | Continuous re-planning loop           |
+| Long-term Learning     | Fixed configuration parameters            | Automated post-incident feedback loop |
++------------------------+-------------------------------------------+---------------------------------------+
 ```
 
-### Key Agentic Capabilities
+### Detailed Workflow Comparison
 
-1. **Autonomous Planning:** Deconstructs complex user prompts (e.g., *"Investigate fire indicators in Pulang Pisau over the past 7 days, estimate burned area, and rank locations near settlements or peatlands"*) into an ordered execution graph covering thermal anomaly retrieval, satellite acquisition, inference, spatial overlay, and reporting.
-2. **Dynamic Tool Selection:** Dispatches calls to specialized modules—NASA FIRMS, Google Earth Engine, U-Net Inference, and Geospatial Analysis engines—based on intermediate data availability and investigation requirements.
-3. **Adaptive Recovery:** Detects obstacles in remote sensing data (e.g., heavy tropical cloud cover or missing satellite passes) and pivots to alternative acquisition windows, temporal composites, or secondary satellite constellations without human intervention.
-4. **Evidence-Based Reasoning:** Evaluates whether gathered evidence meets minimum confidence thresholds before drawing conclusions, pairing automated detections with transparent multi-criteria risk scoring and explicit uncertainty bounds.
+#### Traditional Rule-Based Approach
+```text
+[Hotspot Detected] ──► [Match Nearest Village] ──► [Create Single Ticket] ──► [Alert Crew] ──► [Escalate if no ACK]
+```
+1. **Isolated & Per-Ticket:** Evaluates each thermal anomaly in isolation without cross-referencing adjacent clusters, regional smoke dispersion, or macro-level fire front behavior.
+2. **Greedy Nearest-Neighbor Dispatch:** Matches Hotspot $A$ to the nearest team $X$. If a catastrophic fire emerges at Hotspot $B$ ten minutes later, Team $X$ is already unavailable, stranding higher-priority assets.
+3. **Rigid Escalation Timers:** If a crew does not respond within $N$ minutes, the ticket is forwarded to an upper tier without understanding whether the crew is engaged in transit, cut off by destroyed road bridges, or in an area lacking cellular coverage.
+4. **Static Heuristics:** Relies on hardcoded distance thresholds regardless of whether the fire is burning deep in drained peat or across rocky, mineral soil.
+
+#### Agentic Multi-Agent Approach
+```text
+                     ┌────────────────────────────────────────────────────────┐
+                     │            Cyclic Re-planning Feedback Loop            │
+                     ▼                                                        │
+[Hotspot Feed] ──► [Perception & Fusion] ──► [Risk Scoring] ──► [Verification]─┴─► [Routing & Dispatch] ──► [Coordination]
+                                                                                                                │
+                                                                                                      [Feedback & Learning]
+```
+1. **Credibility Assessment:** Hotspot detections from NASA FIRMS (VIIRS/MODIS), KLHK Sipongi, BMKG meteorological stations, and community reports are fused by the **Perception & Fusion Agent** to filter out industrial flares, solar glint, and false positives.
+2. **Pre-Dispatch Verification:** The **Verification Agent** performs a Value of Information (VOI) assessment, determining whether to deploy aerial drones or notify village volunteers (MPA) before mobilizing heavy fire engines.
+3. **Global Multi-Hotspot Risk Scoring:** The **Risk Scoring Agent** ranks active incidents relative to **all concurrent hotspots**, reasoning over peatland depth, fuel moisture, wind vectors, and settlement smoke hazards.
+4. **Many-to-Many Optimization:** The **Routing & Dispatch Agent** evaluates $N$ response teams against $M$ prioritized incidents, computing true road-network topology, canal water availability, and terrain barriers to minimize total regional damage.
+5. **Two-Way Operational Coordination:** The **Coordination Agent** maintains live contact with crews via WhatsApp and field telemetry, streaming live ETAs and reporting barrier updates.
+6. **Dynamic Recomposition:** If weather patterns shift (e.g., wind reverses toward an urban center) or a high-intensity fire breaks out, the Orchestrator halts execution and **recomposes the global dispatch plan**.
+7. **Continuous Calibration:** Following incident resolution, the **Feedback & Learning Agent** audits prediction accuracy against field realities and autonomously updates weighting parameters.
 
 ---
 
-## 2. Agent Architecture
+## 2. Agent Hierarchy
 
-The SIGAP platform is organized around a central **LLM Orchestrator Agent** that controls the operational workflow while delegating all heavy numerical, geospatial, and neural computations to specialized deterministic tools.
+The system follows a hierarchical delegation pattern. The root **Wildfire Response Orchestrator** governs workflow sequencing, global state reconciliation, and dynamic re-planning, while delegating specialized analysis to six purpose-built sub-agents. 
 
-### 2.1 Architectural Diagram
+### 2.1 Hierarchy Diagram
 
 ```mermaid
 graph TB
-    subgraph UserInterface["User Interface & Interaction Layer"]
-        User["User / Field Officer (BPBD, Manggala Agni)"]
-        NLCommand["Natural Language Command (Indonesian)"]
-        Workspace["AI Investigation Workspace & Interactive Map"]
-        ReviewUI["Human-in-the-Loop Review & Audit View"]
+    subgraph RootLevel["Root Orchestration Layer"]
+        Root["Wildfire Response Orchestrator<br/><code>root_agent</code><br/><i>Gemini 3.5 Flash</i>"]
+        RootSearch["Google Search Sub-Agent<br/><code>root_search_agent</code>"]
+        RootURL["URL Context Sub-Agent<br/><code>root_url_agent</code>"]
+        Root -.->|Delegates Search| RootSearch
+        Root -.->|Delegates Web Fetch| RootURL
     end
 
-    subgraph CoreAgent["Agent Core (LLM Orchestrator)"]
-        Orchestrator["LLM Orchestrator Agent"]
-        Planner["Dynamic Execution Planner"]
-        ReActEngine["ReAct Loop Engine\n(Observe -> Think -> Plan -> Act)"]
-        StateStore["Investigation State Manager\n(Working Memory & Context)"]
-        DecisionLogger["Decision & Audit Logger"]
+    subgraph SpecializedAgents["Domain Sub-Agents (Google ADK)"]
+        A1["1. Perception & Fusion Agent<br/><code>perception_fusion</code><br/><i>Gemini 3.5 Flash</i>"]
+        A2["2. Risk Scoring Agent<br/><code>risk_scoring</code><br/><i>Gemini 3.5 Flash</i>"]
+        A3["3. Verification Agent<br/><code>verification_agent</code><br/><i>Gemini 3.5 Flash</i>"]
+        A4["4. Routing & Dispatch Agent<br/><code>routing_dispatch</code><br/><i>Gemini 3.5 Flash</i>"]
+        A5["5. Coordination Agent<br/><code>coordination_agent</code><br/><i>Gemini 3.5 Flash</i>"]
+        A6["6. Feedback & Learning Agent<br/><code>feedback_learning</code><br/><i>Gemini 3.5 Flash</i>"]
     end
 
-    subgraph ToolSuite["Specialized Execution Tools"]
-        FIRMS["3.1 FIRMS Tool\n(NASA Thermal Anomaly & DBSCAN)"]
-        GEE["3.2 Earth Engine Tool\n(Landsat 8/9, Sentinel-2 Retrieval)"]
-        UNet["3.3 U-Net Inference Tool\n(Burned Area Semantic Segmentation)"]
-        GeoAnalysis["3.4 Geospatial Analysis Tool\n(dNBR, Area, Peat/Settlement Overlay)"]
-        EvidenceEval["3.5 Evidence Evaluation Tool\n(Sufficiency, Confidence & Gaps)"]
-        ReportGen["3.6 Report Generator Tool\n(PDF, GeoJSON, GeoTIFF Exporter)"]
+    subgraph AuxiliaryTools["External Tools & Auxiliary Sub-Agents"]
+        PerceptionSearch["Google Search Sub-Agent<br/>(Live News & BMKG Reports)"]
+        PerceptionURL["URL Context Sub-Agent<br/>(Sipongi Web Scraping)"]
+        RoutingSearch["Google Search Sub-Agent<br/>(Road & Bridge Disruptions)"]
     end
 
-    subgraph ExternalServices["External Data & Runtime Systems"]
-        FIRMS_API["NASA FIRMS API\n(VIIRS / MODIS)"]
-        GEE_API["Google Earth Engine API"]
-        ModelRuntime["PyTorch / ONNX Runtime\n(U-Net on GPU/CPU)"]
-        SpatialDB["Geospatial Vector Layers\n(KLHK Peatlands, BPS Settlements)"]
-    end
+    Root ====>|1. Ingest & Corroborate| A1
+    Root ====>|2. Dynamic MCDA Scoring| A2
+    Root ====>|3. Assess Pre-Dispatch Needs| A3
+    Root ====>|4. Global Fleet Assignment| A4
+    Root ====>|5. Two-Way Field Execution| A5
+    Root ====>|6. Post-Mortem Audit & Weights| A6
 
-    User -->|Sends Query| NLCommand
-    NLCommand -->|Prompt| Orchestrator
-    Orchestrator <--> Planner
-    Orchestrator <--> ReActEngine
-    Orchestrator <--> StateStore
-    ReActEngine --> DecisionLogger
+    A1 -.-> PerceptionSearch
+    A1 -.-> PerceptionURL
+    A4 -.-> RoutingSearch
 
-    ReActEngine -->|Invoke| FIRMS
-    ReActEngine -->|Invoke| GEE
-    ReActEngine -->|Invoke| UNet
-    ReActEngine -->|Invoke| GeoAnalysis
-    ReActEngine -->|Invoke| EvidenceEval
-    ReActEngine -->|Invoke| ReportGen
-
-    FIRMS <--> FIRMS_API
-    GEE <--> GEE_API
-    UNet <--> ModelRuntime
-    GeoAnalysis <--> SpatialDB
-
-    ReportGen --> Workspace
-    DecisionLogger --> Workspace
-    StateStore --> ReviewUI
-    ReviewUI -->|Officer Verification & Feedback| Orchestrator
+    A5 -.->|Trigger Dynamic Re-plan| Root
+    A6 -.->|Calibrate Scoring Weights| A2
 ```
 
-### 2.2 The ReAct Loop (Reason + Act)
+### 2.2 Agent Roster & Tool Registry
 
-The Orchestrator Agent implements a continuous **ReAct (Reasoning and Acting)** cycle throughout the investigation lifecycle:
-
-```mermaid
-stateDiagram-v2
-    [*] --> Observe
-    Observe --> Think: Tool Output / User Input Available
-    Think --> Plan: Evaluate Findings & Context
-    Plan --> Act: Formulate Concrete Tool Action
-    Act --> Evaluate: Tool Execution Response
-    Evaluate --> Observe: More Steps Needed / Recovery Triggered
-    Evaluate --> Conclude: Evidence Complete / Max Retries Exceeded
-    Conclude --> [*]
-```
-
-- **Observe:** The agent inspects incoming user prompts, tool responses, satellite metadata, or error signals.
-- **Think:** The agent evaluates data quality, checks whether criteria are satisfied (e.g., *Is cloud cover below 20%? Did FIRMS detect cluster concentrations?*), and reasons over what missing information is required.
-- **Plan:** The agent selects the next best action, re-orders tasks, or selects an alternative recovery path if intermediate data fails quality checks.
-- **Act:** The agent outputs a structured tool call with validated arguments.
-- **Evaluate:** The agent benchmarks the returned tool data against evidence sufficiency rules, records the step in the `decision_log`, and determines whether to repeat the loop or finalize the investigation.
-
-### 2.3 State Management Across Multi-Step Workflows
-
-Multi-step investigations require persistent working memory to prevent hallucinations and context drift. The agent maintains an active `InvestigationState` object across the entire session:
-- **Traceability:** Every intermediate output (hotspot GeoJSON, pre/post satellite scene IDs, raw dNBR GeoTIFF paths, polygon boundaries) is committed to structured state with unique UUIDs.
-- **Context Economy:** Large rasters and spatial geometries are stored on local storage or cloud object stores; the LLM context receives only metadata summaries, statistical distributions, and bounding boxes.
-- **Idempotency & Checkpoints:** If a downstream tool fails, the state manager allows the agent to roll back or re-execute from the last valid checkpoint without repeating expensive external API calls.
+| Agent Name | Python Variable Name | Primary Operational Role | Core Tools / Integrations | Dedicated Sub-Agents |
+|---|---|---|---|---|
+| **Wildfire Response Orchestrator** | `root_agent` | Central coordinator; plans workflow, delegates sub-tasks, handles re-planning, compiles SITREP. | `compile_sitrep_tool`, `publish_bulletin_tool` | `root_search_agent`, `root_url_agent` |
+| **Perception & Fusion Agent** | `perception_fusion` | Fuses multi-satellite sensors (FIRMS, Sipongi), BMKG weather, and citizen reports; resolves conflicts. | `firms_query_tool`, `sipongi_sync_tool`, `bmkg_weather_tool`, `dbscan_cluster_tool` | `perception_search_agent`, `perception_url_agent` |
+| **Risk Scoring Agent** | `risk_scoring` | Contextual multi-criteria risk scoring; adjusts weights based on dry season, peatland, and smoke vectors. | `peatland_overlay_tool`, `settlement_proximity_tool`, `wind_dispersion_tool`, `trend_analysis_tool` | None |
+| **Verification Agent** | `verification_agent` | Value of Information (VOI) engine; determines if drone, satellite, or community check is needed before dispatch. | `gee_imagery_tool`, `drone_tasking_tool`, `community_query_tool` | None |
+| **Routing & Dispatch Agent** | `routing_dispatch` | Global many-to-many fleet allocation; optimizes crew-to-fire mapping based on roads, terrain, and water bodies. | `road_network_routing_tool`, `water_source_finder_tool`, `fleet_status_tool` | `routing_search_agent` |
+| **Coordination Agent** | `coordination_agent` | Field communications; sends mission packages, tracks crew GPS, streams ETAs, escalates life-safety hazards. | `whatsapp_broadcast_tool`, `field_telemetry_tool`, `supervisor_alert_tool` | None |
+| **Feedback & Learning Agent** | `feedback_learning` | Post-incident evaluation; audits prediction errors, evaluates suppression times, and updates model weights. | `incident_history_tool`, `weight_calibration_tool`, `audit_logger_tool` | None |
 
 ---
 
-## 3. Tools
+## 3. Technology Stack
 
-Each tool in the SIGAP architecture is an independent, deterministic software component exposed to the LLM Orchestrator via a strict JSON Schema interface.
+### 3.1 Google ADK (Agent Development Kit)
+SIGAP uses the **Google Agent Development Kit (ADK)** as its agent orchestration framework. Google ADK provides:
+- First-class primitives for multi-agent delegation (`Agent`, `SubAgent`, and parent-child communication channels).
+- Native support for tool calling, function declarations, and JSON schema validation.
+- Built-in integrations for search engines (`GoogleSearchTool`) and document ingestion (`UrlContextTool`).
+- Robust session memory and event-driven control loops.
 
----
+### 3.2 The GlobalGemini Class & Vertex AI Global Routing
 
-### 3.1 FIRMS Tool (NASA FIRMS Hotspot Retrieval)
+#### Why Subclassing Gemini is Mandatory
+Google's next-generation **Gemini 3-series** foundation models (specifically **Gemini 3.5 Flash**) are served exclusively through the Vertex AI **`global`** endpoint location (`global-aiplatform.googleapis.com`), rather than traditional regional endpoints such as `us-central1`, `asia-southeast1`, or `europe-west4`.
 
-#### Purpose
-Queries the NASA Fire Information for Resource Management System (FIRMS) API for thermal anomalies detected by VIIRS (Suomi NPP, NOAA-20, NOAA-21) and MODIS (Terra, Aqua) sensors across a designated administrative area or bounding box. It applies spatial clustering (DBSCAN) to group dispersed hotspot detections into cohesive candidate investigation clusters.
-
-#### Input Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "FIRMSQueryInput",
-  "type": "object",
-  "properties": {
-    "region": {
-      "type": "object",
-      "properties": {
-        "admin_name": { "type": "string", "description": "e.g., 'Pulang Pisau', 'Kalimantan Tengah'" },
-        "bbox": {
-          "type": "array",
-          "items": { "type": "number" },
-          "minItems": 4,
-          "maxItems": 4,
-          "description": "[min_lon, min_lat, max_lon, max_lat] in WGS84"
-        }
-      },
-      "additionalProperties": false
-    },
-    "date_start": { "type": "string", "format": "date", "description": "YYYY-MM-DD" },
-    "date_end": { "type": "string", "format": "date", "description": "YYYY-MM-DD" },
-    "source": {
-      "type": "string",
-      "enum": ["VIIRS_SNPP", "VIIRS_NOAA20", "VIIRS_NOAA21", "MODIS_NRT", "ALL"],
-      "default": "ALL"
-    },
-    "min_confidence": { "type": "string", "enum": ["low", "nominal", "high", "all"], "default": "nominal" },
-    "clustering": {
-      "type": "object",
-      "properties": {
-        "eps_km": { "type": "number", "default": 2.5, "description": "DBSCAN epsilon in km" },
-        "min_samples": { "type": "integer", "default": 2, "description": "Minimum points per cluster" }
-      },
-      "additionalProperties": false
-    }
-  },
-  "required": ["date_start", "date_end"]
-}
+Standard ADK `Gemini` client wrappers default to regional routing derived from ambient environment variables (`GOOGLE_CLOUD_REGION` or `VERTEX_AI_LOCATION`). When an ADK application attempts to instantiate `gemini-3.5-flash` against a regional endpoint (e.g., `us-central1-aiplatform.googleapis.com`), Vertex AI throws an error:
+```text
+NotFound: 404 Publisher Model `projects/.../locations/us-central1/publishers/google/models/gemini-3.5-flash` not found. 
+Gemini 3-series models are currently only supported in the 'global' region.
 ```
 
-#### Output Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "FIRMSQueryOutput",
-  "type": "object",
-  "properties": {
-    "total_hotspots": { "type": "integer" },
-    "hotspots": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "latitude": { "type": "number" },
-          "longitude": { "type": "number" },
-          "brightness": { "type": "number" },
-          "acq_datetime": { "type": "string", "format": "date-time" },
-          "satellite": { "type": "string" },
-          "confidence": { "type": "string" },
-          "frp": { "type": "number", "description": "Fire Radiative Power in MW" },
-          "daynight": { "type": "string", "enum": ["D", "N"] }
-        },
-        "required": ["latitude", "longitude", "acq_datetime", "confidence", "frp"]
-      }
-    },
-    "clusters": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "cluster_id": { "type": "string" },
-          "centroid": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-          "bbox": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
-          "hotspot_count": { "type": "integer" },
-          "mean_frp": { "type": "number" },
-          "max_frp": { "type": "number" },
-          "suggested_aoi": { "type": "object", "description": "GeoJSON Polygon for satellite query" }
-        },
-        "required": ["cluster_id", "centroid", "hotspot_count", "suggested_aoi"]
-      }
-    }
-  },
-  "required": ["total_hotspots", "hotspots", "clusters"]
-}
-```
+To prevent runtime failures and ensure seamless ADK integration, SIGAP defines a dedicated `GlobalGemini` class that intercepts client initialization and explicitly routes all requests to Vertex AI's `global` control plane.
 
-#### Error Handling & Fallback Behavior
-- **API Rate Limiting / 429:** Implements exponential backoff (initial delay 2s, factor 2x, max 3 retries).
-- **Zero Hotspots Found:** Returns `total_hotspots: 0` with an empty cluster list without throwing an exception. The Orchestrator receives this cleanly and can prompt the user to expand the temporal window or check adjacent regencies.
-- **Invalid Bounding Box / Admin Name:** Reverts to geocoding lookup using official Indonesian administrative boundaries; fails with actionable validation message if resolution fails.
-
----
-
-### 3.2 Earth Engine Tool (Satellite Imagery)
-
-#### Purpose
-Searches, filters, and downloads satellite imagery collections from Google Earth Engine (GEE). Specifically queries **Landsat 8 and Landsat 9** Surface Reflectance collections (and **Sentinel-2 MSI** for historical 2019 validation or higher-resolution fallback). Retrieves pre-fire baseline imagery and post-fire event imagery for the selected AOI, computing scene-level and AOI-level cloud cover statistics.
-
-#### Input Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "EarthEngineQueryInput",
-  "type": "object",
-  "properties": {
-    "aoi": {
-      "type": "object",
-      "description": "GeoJSON Polygon defining Area of Interest"
-    },
-    "date_range_before": {
-      "type": "object",
-      "properties": {
-        "start": { "type": "string", "format": "date" },
-        "end": { "type": "string", "format": "date" }
-      },
-      "required": ["start", "end"]
-    },
-    "date_range_after": {
-      "type": "object",
-      "properties": {
-        "start": { "type": "string", "format": "date" },
-        "end": { "type": "string", "format": "date" }
-      },
-      "required": ["start", "end"]
-    },
-    "max_cloud_cover": { "type": "number", "default": 20.0, "description": "Maximum tolerated cloud cover percentage" },
-    "satellite_preference": {
-      "type": "string",
-      "enum": ["LANDSAT_8_9", "SENTINEL_2", "AUTO"],
-      "default": "LANDSAT_8_9"
-    },
-    "composite_strategy": {
-      "type": "string",
-      "enum": ["SINGLE_BEST_SCENE", "MEDIAN_COMPOSITE", "MOSAIC"],
-      "default": "SINGLE_BEST_SCENE"
-    }
-  },
-  "required": ["aoi", "date_range_before", "date_range_after"]
-}
-```
-
-#### Output Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "EarthEngineQueryOutput",
-  "type": "object",
-  "properties": {
-    "status": { "type": "string", "enum": ["SUCCESS", "HIGH_CLOUD_COVER", "NO_SCENES_FOUND"] },
-    "before_image": {
-      "type": "object",
-      "properties": {
-        "scene_id": { "type": "string" },
-        "satellite": { "type": "string" },
-        "acquisition_date": { "type": "string", "format": "date" },
-        "cloud_cover_percent": { "type": "number" },
-        "raster_uri": { "type": "string", "description": "Local path or cloud bucket URI to GeoTIFF" },
-        "thumbnail_url": { "type": "string" }
-      },
-      "required": ["scene_id", "acquisition_date", "cloud_cover_percent", "raster_uri"]
-    },
-    "after_image": {
-      "type": "object",
-      "properties": {
-        "scene_id": { "type": "string" },
-        "satellite": { "type": "string" },
-        "acquisition_date": { "type": "string", "format": "date" },
-        "cloud_cover_percent": { "type": "number" },
-        "raster_uri": { "type": "string" },
-        "thumbnail_url": { "type": "string" }
-      },
-      "required": ["scene_id", "acquisition_date", "cloud_cover_percent", "raster_uri"]
-    },
-    "quality_indicators": {
-      "type": "object",
-      "properties": {
-        "aoi_cloud_coverage_after": { "type": "number" },
-        "valid_pixel_ratio": { "type": "number" },
-        "data_gaps_detected": { "type": "boolean" }
-      },
-      "required": ["aoi_cloud_coverage_after", "valid_pixel_ratio"]
-    }
-  },
-  "required": ["status"]
-}
-```
-
-#### Error Handling & Fallback Behavior
-- **Severe Cloud Cover (> max_cloud_cover):** The tool returns `status: "HIGH_CLOUD_COVER"` alongside the lowest-cloud scene found. It provides recommendation metadata to the Orchestrator (e.g., *"Recommend extending post-event date window by 14 days or switching to MEDIAN_COMPOSITE"*).
-- **Pre-2021 Queries:** Landsat 9 was launched in September 2021. For queries prior to late 2021 (such as the 2019 Central Kalimantan benchmark), the tool automatically filters for Landsat 8 and Sentinel-2, alerting the agent that Landsat 9 is unavailable for the target period.
-- **GEE Quota / Auth Error:** Raises a structured service exception that causes the Orchestrator to notify the user or retry after temporary credential refresh.
-
----
-
-### 3.3 U-Net Inference Tool (Burned Area Segmentation)
-
-#### Purpose
-Executes semantic segmentation using a trained deep convolutional U-Net model (e.g., trained on the BRIN 227-scene Indonesian burned area dataset). Takes multi-spectral satellite surface reflectance arrays, predicts burned area probability at each pixel, thresholds predictions into a binary mask, vectorizes clusters into GeoJSON polygons, and calculates total burn acreage.
-
-#### Input Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "UNetInferenceInput",
-  "type": "object",
-  "properties": {
-    "image_raster_uri": { "type": "string", "description": "Path to preprocessed multi-band GeoTIFF" },
-    "bands_order": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": ["B2", "B3", "B4", "B5", "B6", "B7"],
-      "description": "Blue, Green, Red, NIR, SWIR1, SWIR2"
-    },
-    "model_version": { "type": "string", "default": "unet_brin_id_v1.0" },
-    "probability_threshold": { "type": "number", "default": 0.50, "minimum": 0.0, "maximum": 1.0 },
-    "min_polygon_area_ha": { "type": "number", "default": 0.5, "description": "Filter out speckle noise below 0.5 ha" }
-  },
-  "required": ["image_raster_uri"]
-}
-```
-
-#### Output Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "UNetInferenceOutput",
-  "type": "object",
-  "properties": {
-    "status": { "type": "string", "enum": ["SUCCESS", "LOW_CONFIDENCE", "INFERENCE_ERROR"] },
-    "mask_raster_uri": { "type": "string", "description": "Path to binary output GeoTIFF" },
-    "confidence_raster_uri": { "type": "string", "description": "Path to probability heatmap GeoTIFF" },
-    "polygons_geojson": {
-      "type": "object",
-      "description": "GeoJSON FeatureCollection of burned area boundaries"
-    },
-    "estimated_area_ha": { "type": "number", "description": "Total predicted burned area in hectares" },
-    "mean_prediction_confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-    "model_metadata": {
-      "type": "object",
-      "properties": {
-        "model_version": { "type": "string" },
-        "inference_duration_seconds": { "type": "number" },
-        "hardware_used": { "type": "string" }
-      }
-    }
-  },
-  "required": ["status", "estimated_area_ha", "polygons_geojson", "mask_raster_uri"]
-}
-```
-
-#### Error Handling & Fallback Behavior
-- **Dimension / Band Mismatch:** Verifies that all required spectral bands are present; returns detailed schema error if NIR/SWIR bands are missing.
-- **Low Confidence Prediction (< 0.40 mean probability):** The tool sets `status: "LOW_CONFIDENCE"`, exports the tentative mask, and adds an explicit warning in the output. The Orchestrator uses this to classify the finding as *"Indication Only - Unverified by Model"* rather than reporting a definitive scar.
-- **CUDA Out-of-Memory (OOM):** The tool catches memory errors, slices large scenes into 256x256 or 512x512 overlapping tiles with a blending taper, and recombines the mask seamlessly.
-
----
-
-### 3.4 Geospatial Analysis Tool
-
-#### Purpose
-A deterministic geospatial computing suite providing specialized sub-functions for spectral burn index calculation, projection-aware area measurement, spatial risk factor overlays, and transparent Multi-Criteria Decision Analysis (MCDA) scoring.
-
-#### Sub-Functions & Signatures
-
+#### Implementation: `GlobalGemini`
 ```python
-# Sub-function 1: Spectral Burn Ratio & Severity
-compute_dnbr(
-    before_raster_uri: str, 
-    after_raster_uri: str, 
-    nir_band: str = "B5", 
-    swir2_band: str = "B7"
-) -> Dict[str, Any]
+"""sigap/agent/models/global_gemini.py
 
-# Sub-function 2: Planar Geodesic Area
-compute_area(
-    mask_raster_uri: str, 
-    target_utm_epsg: Optional[int] = None
-) -> Dict[str, Any]
+Custom Gemini model wrapper for Google ADK ensuring Vertex AI routing
+to the 'global' endpoint required by Gemini 3-series models.
+"""
 
-# Sub-function 3: Multi-Layer Spatial Overlay
-overlay_risk_factors(
-    burned_polygons_geojson: Dict[str, Any],
-    peatland_layer_uri: str = "assets/layers/gambut_klhk.geojson",
-    settlement_layer_uri: str = "assets/layers/permukiman_bps.geojson"
-) -> Dict[str, Any]
+import os
+import logging
+from typing import Any, Dict, Optional
+from google.adk.models import Gemini
+from google.api_core.client_options import ClientOptions
 
-# Sub-function 4: Multi-Criteria Priority Ranking
-compute_priority_score(
-    enriched_areas: List[Dict[str, Any]],
-    weights: Dict[str, float] = {
-        "peatland": 0.35,
-        "settlement_proximity": 0.25,
-        "hotspot_concentration": 0.20,
-        "burned_area_size": 0.10,
-        "dnbr_severity": 0.10
-    }
-) -> List[Dict[str, Any]]
+logger = logging.getLogger("SIGAP.Agent.GlobalGemini")
+
+
+class GlobalGemini(Gemini):
+    """Subclass of ADK Gemini forcing Vertex AI client requests to the 'global' location.
+
+    Attributes:
+        model: Model name string (defaults to 'gemini-3.5-flash').
+        location: Forced to 'global'.
+        client_options: Configured with api_endpoint='global-aiplatform.googleapis.com'.
+    """
+
+    DEFAULT_MODEL = "gemini-3.5-flash"
+    GLOBAL_ENDPOINT = "global-aiplatform.googleapis.com"
+    GLOBAL_LOCATION = "global"
+
+    def __init__(
+        self,
+        model: str = DEFAULT_MODEL,
+        temperature: float = 0.2,
+        max_output_tokens: Optional[int] = None,
+        client_options: Optional[ClientOptions] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the GlobalGemini model instance."""
+        # 1. Force location parameter to 'global'
+        kwargs["location"] = self.GLOBAL_LOCATION
+
+        # 2. Configure endpoint to global-aiplatform.googleapis.com
+        if client_options is None:
+            client_options = ClientOptions(api_endpoint=self.GLOBAL_ENDPOINT)
+        else:
+            client_options.api_endpoint = self.GLOBAL_ENDPOINT
+
+        kwargs["client_options"] = client_options
+
+        # 3. Ensure environment variables do not override global routing
+        project_id = kwargs.get("project") or os.getenv("GOOGLE_CLOUD_PROJECT")
+        if not project_id:
+            logger.warning("GOOGLE_CLOUD_PROJECT is not explicitly set; falling back to ADC.")
+
+        logger.info(
+            f"Initializing GlobalGemini: model={model}, location={self.GLOBAL_LOCATION}, "
+            f"endpoint={self.GLOBAL_ENDPOINT}"
+        )
+
+        super().__init__(
+            model=model,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            **kwargs,
+        )
 ```
 
-#### Input Schema
+#### Instantiating Agents with GlobalGemini
+```python
+from sigap.agent.models.global_gemini import GlobalGemini
+from google.adk.agents import Agent
+
+# Instantiate shared model reference
+gemini_model = GlobalGemini(
+    model="gemini-3.5-flash",
+    temperature=0.1,  # Low temperature for deterministic operational logic
+)
+
+# Root agent configured with GlobalGemini
+root_agent = Agent(
+    name="wildfire_response_orchestrator",
+    model=gemini_model,
+    instruction="Coordinate autonomous wildfire response across all active Indonesian jurisdictions.",
+)
+```
+
+---
+
+## 4. Agent Specifications
+
+---
+
+### 4.1 Perception & Fusion Agent
+
+#### Purpose
+The **Perception & Fusion Agent** is responsible for continuous situational awareness and sensor corroboration. It ingests thermal anomaly observations from NASA FIRMS, the Indonesian Ministry of Environment and Forestry's Sipongi portal, BMKG meteorological stations, and local community observations. It resolves sensor discrepancies (e.g., high-confidence VIIRS detection vs. no MODIS detection due to orbit timing or spatial resolution) and determines the calibrated probability $P(\text{real\_fire})$.
+
+#### Technical Parameters
+- **Python Variable:** `perception_fusion`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.1)`
+- **Tools:** `firms_query_tool`, `sipongi_sync_tool`, `bmkg_weather_tool`, `dbscan_cluster_tool`
+- **Sub-Agents:** `perception_search_agent` (GoogleSearchTool for local news/social reports), `perception_url_agent` (UrlContextTool for scraping official provincial agency bulletins)
+
+#### Input Contract
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "GeospatialAnalysisInput",
-  "type": "object",
-  "properties": {
-    "action": {
-      "type": "string",
-      "enum": ["COMPUTE_DNBR", "COMPUTE_AREA", "OVERLAY_RISK_FACTORS", "COMPUTE_PRIORITY_SCORE", "RUN_FULL_PIPELINE"]
-    },
-    "params": {
-      "type": "object",
-      "properties": {
-        "before_raster_uri": { "type": "string" },
-        "after_raster_uri": { "type": "string" },
-        "mask_raster_uri": { "type": "string" },
-        "burned_polygons": { "type": "object" },
-        "hotspot_clusters": { "type": "array" },
-        "custom_weights": { "type": "object" }
-      }
-    }
+  "temporal_window": {
+    "start_utc": "2026-10-21T00:00:00Z",
+    "end_utc": "2026-10-21T12:00:00Z"
   },
-  "required": ["action", "params"]
+  "geographic_bounds": {
+    "province": "Kalimantan Tengah",
+    "regency": "Pulang Pisau",
+    "bbox": [113.80, -3.20, 114.50, -2.50]
+  },
+  "field_reports": [
+    {
+      "report_id": "REP-20261021-001",
+      "reporter_type": "COMMUNITY_MPA",
+      "location": [-2.8541, 114.1205],
+      "description": "Thick white smoke observed rising from peat canal zone.",
+      "timestamp": "2026-10-21T10:15:00Z"
+    }
+  ]
 }
 ```
 
-#### Output Schema
+#### Output Contract
 ```json
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "GeospatialAnalysisOutput",
-  "type": "object",
-  "properties": {
-    "dnbr_results": {
-      "type": "object",
-      "properties": {
-        "dnbr_raster_uri": { "type": "string" },
-        "mean_dnbr": { "type": "number" },
-        "severity_breakdown_ha": {
-          "type": "object",
-          "properties": {
-            "unburned": { "type": "number" },
-            "low_severity": { "type": "number" },
-            "moderate_severity": { "type": "number" },
-            "high_severity": { "type": "number" }
-          }
-        }
-      }
+  "status": "FUSED",
+  "fused_clusters": [
+    {
+      "cluster_id": "CLS-PLS-001",
+      "centroid": [-2.8512, 114.1250],
+      "bounding_box": [114.1100, -2.8600, 114.1400, -2.8400],
+      "hotspot_count": 8,
+      "mean_frp_mw": 48.7,
+      "max_frp_mw": 112.4,
+      "calibrated_fire_probability": 0.94,
+      "sensor_corroboration": {
+        "viirs_snpp": { "detected": true, "confidence": "high", "count": 5 },
+        "viirs_noaa20": { "detected": true, "confidence": "high", "count": 3 },
+        "modis_terra": { "detected": false, "reason": "ORBIT_TIMING_MISMATCH" },
+        "sipongi_klhk": { "detected": true, "confidence": "high" },
+        "bmkg_fwi": { "ffmc": 88.5, "isi": 12.1, "danger_level": "EXTREME" },
+        "field_corroboration": true
+      },
+      "conflict_notes": "MODIS missed cluster due to satellite overpass timing (03:30 UTC), but dual VIIRS passes and field report corroborate severe peat ignition."
+    }
+  ]
+}
+```
+
+#### Decision & Conflict Resolution Logic
+The agent evaluates sensor conflicts using Bayesian updates and sensor physics:
+1. **Resolution Mismatch:** VIIRS ($375\text{ m}$) detects smaller, lower-intensity smoldering fires that MODIS ($1\text{ km}$) cannot register. A positive VIIRS detection without a MODIS detection is **not** treated as a false positive if Fire Radiative Power (FRP) is consistent with early smoldering ($< 50\text{ MW}$).
+2. **Solar Glint & Industrial Noise:** Candidate hotspots within $500\text{ m}$ of known palm oil processing mills, refineries, or metal roofs with FRP persisting identically throughout all four seasons are filtered out as fixed industrial heat sources.
+3. **Cloud Gaps & Multi-Satellite Fusion:** If Sensor A flags high confidence but Sensor B indicates cloud cover over the same pixel, the agent queries meteorological cloud drift from BMKG. If clear-sky gap probability was $> 0.30$ during Sensor A's overpass, the detection is upheld with $P(\text{real\_fire}) \ge 0.85$.
+
+---
+
+### 4.2 Risk Scoring Agent
+
+#### Purpose
+The **Risk Scoring Agent** performs dynamic, context-aware Multi-Criteria Decision Analysis (MCDA). Unlike rigid static scoring scripts, this agent applies LLM reasoning over environmental parameters, adapting factor weights according to seasonal severity, soil characteristics, and atmospheric transport hazards.
+
+#### Technical Parameters
+- **Python Variable:** `risk_scoring`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.2)`
+- **Tools:** `peatland_overlay_tool`, `settlement_proximity_tool`, `wind_dispersion_tool`, `trend_analysis_tool`
+- **Sub-Agents:** None (deterministic GIS tools provide inputs)
+
+#### Factors Evaluated
+- **Substrate & Peatland Vulnerability:** Evaluates Ministry of Agriculture / KLHK peatland maps. Peat soils ($> 3\text{ m}$ depth, hemic/sapric) receive maximum vulnerability due to underground smoldering and immense carbon emissions.
+- **Settlement & Asset Proximity:** Computes Euclidean and road-buffer distance to villages (*kampung*), schools, hospitals, and national infrastructure.
+- **Atmospheric Smoke Plume Vectors:** Uses BMKG surface wind directions and speed ($10\text{ m}$ altitude) to simulate downwind smoke dispersion trajectories toward populated urban centers.
+- **Spatiotemporal Cluster Growth:** Tracks rate of spread ($\Delta \text{hectares}/\text{hour}$) across consecutive satellite overpasses.
+- **Historical Recurrence:** Cross-references historical 10-year fire perimeters. Repeated fire scars indicate intentional concession burn cycles or drainage degradation.
+
+#### Dynamic Weighting Behavior
+Weights adapt dynamically based on climatic season and regional vulnerability:
+- **Peak Dry Season / El Niño Alert (August–October):** Peatland weight increases from $0.25$ to $0.45$; settlement proximity weight adjusts to $0.30$.
+- **Transboundary Smoke Threat:** If prevailing winds blow directly toward international flight paths or major metropolitan centers (e.g., Palangka Raya or Pekanbaru), the downwind population hazard multiplier scales up by $1.5\times$.
+
+$$\text{Risk Score} = w_{\text{peat}}(t) \cdot S_{\text{peat}} + w_{\text{settle}}(t) \cdot S_{\text{settle}} + w_{\text{wind}}(t) \cdot S_{\text{smoke}} + w_{\text{growth}} \cdot S_{\text{growth}} + w_{\text{recur}} \cdot S_{\text{recur}}$$
+
+#### Input Contract
+```json
+{
+  "fused_clusters": [
+    {
+      "cluster_id": "CLS-PLS-001",
+      "centroid": [-2.8512, 114.1250],
+      "hotspot_count": 8,
+      "mean_frp_mw": 48.7,
+      "calibrated_fire_probability": 0.94
+    }
+  ],
+  "meteorological_conditions": {
+    "wind_speed_kmh": 22.4,
+    "wind_direction_deg": 135.0,
+    "days_since_rain": 14,
+    "el_nino_phase": "MODERATE_EL_NINO"
+  }
+}
+```
+
+#### Output Contract
+```json
+{
+  "ranked_incidents": [
+    {
+      "cluster_id": "CLS-PLS-001",
+      "priority_rank": 1,
+      "composite_risk_score": 93.8,
+      "factor_breakdown": {
+        "peatland_vulnerability": 98.0,
+        "settlement_smoke_hazard": 92.5,
+        "growth_rate_score": 88.0,
+        "historical_recurrence": 85.0
+      },
+      "active_weights": {
+        "peatland": 0.40,
+        "settlement_proximity": 0.30,
+        "wind_smoke_vector": 0.15,
+        "growth_trend": 0.10,
+        "recurrence": 0.05
+      },
+      "reasoning_rationale": "High priority: Cluster is situated directly over deep Ombrogenous Peat (>3m depth) along the Sebangau basin. Active SE wind (135 deg at 22 km/h) is pushing dense particulate matter toward the northern perimeter of Palangka Raya (12 km away). Extreme drought index warrants immediate tactical containment."
+    }
+  ]
+}
+```
+
+---
+
+### 4.3 Verification Agent
+
+#### Purpose
+The **Verification Agent** implements an automated **Value of Information (VOI)** decision framework. It determines whether a high-risk or ambiguous fire detection requires pre-dispatch verification (e.g., aerial UAV reconnaissance, high-resolution optical satellite tasking via PlanetScope/Sentinel-2, or dispatching a village Masyarakat Peduli Api scout) prior to deploying full suppression crews and water tankers.
+
+#### Technical Parameters
+- **Python Variable:** `verification_agent`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.1)`
+- **Tools:** `gee_imagery_tool`, `drone_tasking_tool`, `community_query_tool`
+- **Sub-Agents:** None
+
+#### Decision Framework & Economic Trade-off
+The agent continuously balances the operational cost of mobilizing a false positive against the catastrophic risk of a delayed response to an underground peat fire:
+
+$$\text{Expected Cost of Direct Dispatch} = (1 - P(\text{fire})) \cdot C_{\text{false\_alarm\_dispatch}} + P(\text{fire}) \cdot C_{\text{suppression\_early}}$$
+
+$$\text{Expected Cost of Verification} = C_{\text{recon}} + P(\text{fire}) \cdot \left[ C_{\text{suppression\_delayed}} + \Delta_{\text{spread}}(\tau_{\text{recon}}) \cdot D_{\text{peat}} \right]$$
+
+Where:
+- $C_{\text{false\_alarm\_dispatch}}$: Fuel, personnel wear, pump mobilization, and opportunity cost of diverting teams from other zones ($\sim \$1,200$).
+- $\Delta_{\text{spread}}(\tau_{\text{recon}}) \cdot D_{\text{peat}}$: Exponential cost growth when an underground peat fire expands during the reconnaissance delay $\tau_{\text{recon}}$ ($\sim \$8,000/\text{hr}$).
+
+#### Operational Rules
+1. **Immediate Direct Dispatch ($P(\text{fire}) \ge 0.85$ and Risk Score $\ge 80$):** High confidence on peatland near settlements bypasses pre-dispatch verification entirely. The agent issues `DIRECT_DISPATCH`.
+2. **Drone Reconnaissance ($0.50 \le P(\text{fire}) < 0.85$ and Distance $< 15\text{ km}$ from Drone Hub):** Rapid UAV inspection confirms visual flame/smoke coordinates within 20 minutes.
+3. **Community Scout Check ($0.40 \le P(\text{fire}) < 0.85$ and Remote Peat):** Automated ping sent to nearest registered Masyarakat Peduli Api (MPA) field volunteer.
+4. **Hold & Satellite Monitoring ($P(\text{fire}) < 0.40$):** Sensor anomaly logged; queued for next satellite pass without spending field resources.
+
+#### Input/Output Contract
+```json
+// Input
+{
+  "cluster_id": "CLS-PLS-001",
+  "calibrated_fire_probability": 0.72,
+  "composite_risk_score": 86.5,
+  "closest_crew_distance_km": 38.0,
+  "closest_drone_hub_distance_km": 11.2,
+  "nearest_mpa_community": "Desa Bereng Bengkel"
+}
+
+// Output
+{
+  "verification_action": "TASK_DRONE_RECONNAISSANCE",
+  "rationale": "Confidence is 72% with high peat risk score (86.5), but crew travel distance is 38 km over difficult logging tracks. Dispatching Hub-2 UAV provides visual confirmation in 18 minutes, preventing unnecessary mobilization of 14 personnel if anomaly is localized land-clearing stubble.",
+  "target_coordinates": [-2.8512, 114.1250],
+  "timeout_minutes": 25,
+  "fallback_plan": "If drone telemetry fails within 25 minutes, automatically escalate to DIRECT_DISPATCH."
+}
+```
+
+---
+
+### 4.4 Routing & Dispatch Agent
+
+#### Purpose
+The **Routing & Dispatch Agent** executes a **many-to-many global fleet optimization**. Traditional dispatch algorithms greedily match a single fire to the nearest available crew, leading to severe sub-optimality during peak fire seasons with dozens of simultaneous ignitions. This agent solves a global assignment problem ($N$ response units $\times$ $M$ prioritized wildfires) to minimize total regional burn damage.
+
+#### Technical Parameters
+- **Python Variable:** `routing_dispatch`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.1)`
+- **Tools:** `road_network_routing_tool`, `water_source_finder_tool`, `fleet_status_tool`
+- **Sub-Agents:** `routing_search_agent` (GoogleSearchTool for real-time reports of flooded bridges, washed-out logging roads, or community roadblocks)
+
+#### Real-World Operational Constraints
+- **True Road Network Topology:** Rejects Euclidean straight-line distance. Calculates route graphs over OpenStreetMap, provincial highway vectors, and forestry concession tracks.
+- **Bridge & Vehicle Weight Capacities:** Prevents heavy 5,000-liter water tankers from being routed across wooden rural peat bridges rated for $< 3\text{ tons}$.
+- **Water Source Proximity:** Wildfire suppression in peat requires continuous high-volume pumping. The agent cross-references active river discharge, canal block reservoirs (*sekat kanal*), and retention basins within $1.5\text{ km}$ of the incident.
+- **Crew Fatigue & Readiness:** Factors in hours on duty, equipment state (portable high-pressure pumps vs. backpack sprayers), and remaining fuel.
+
+#### Input Contract
+```json
+{
+  "active_incidents": [
+    { "incident_id": "INC-01", "location": [-2.8512, 114.1250], "priority_score": 93.8, "required_crews": 2 },
+    { "incident_id": "INC-02", "location": [-2.7210, 114.3310], "priority_score": 74.2, "required_crews": 1 }
+  ],
+  "available_resources": [
+    { "team_id": "MAG-DAOP-01", "type": "Manggala Agni Daops I", "base_coords": [-2.2150, 113.9180], "equipment": ["PUMP_MARK3", "TANKER_3000L"], "status": "AVAILABLE" },
+    { "team_id": "BPBD-REG-03", "type": "BPBD Quick Response", "base_coords": [-2.9100, 114.0500], "equipment": ["PORTABLE_PUMP", "PERSONNEL_TRUCK"], "status": "AVAILABLE" },
+    { "team_id": "MPA-DESA-05", "type": "Masyarakat Peduli Api", "base_coords": [-2.8600, 114.1100], "equipment": ["BACKPACK_SPRAYERS"], "status": "AVAILABLE" }
+  ]
+}
+```
+
+#### Output Contract
+```json
+{
+  "optimization_status": "OPTIMAL_GLOBAL_ASSIGNMENT",
+  "assignments": [
+    {
+      "incident_id": "INC-01",
+      "assigned_teams": ["BPBD-REG-03", "MPA-DESA-05"],
+      "primary_access_route": "Jl. Trans Kalimantan -> Sp. Bereng -> Logging Track 4",
+      "road_distance_km": 21.4,
+      "estimated_travel_time_min": 42,
+      "identified_water_source": {
+        "type": "CANAL_BLOCK_RESERVOIR",
+        "distance_m": 350,
+        "coordinates": [-2.8530, 114.1220],
+        "estimated_depth_m": 1.8
+      },
+      "hazard_warning": "Logging Track 4 has sandy peat shoulders; heavy tankers must park at Sp. Bereng and lay 400m hose lines."
     },
-    "priority_ranking": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "candidate_id": { "type": "string" },
-          "rank": { "type": "integer" },
-          "priority_level": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
-          "total_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-          "factor_breakdown": {
-            "type": "object",
-            "properties": {
-              "on_peatland": { "type": "boolean" },
-              "distance_to_settlement_km": { "type": "number" },
-              "hotspot_density": { "type": "number" },
-              "estimated_area_ha": { "type": "number" },
-              "mean_dnbr": { "type": "number" }
-            }
-          },
-          "why_this_area": { "type": "string", "description": "Deterministic text explanation of score drivers" }
-        },
-        "required": ["candidate_id", "rank", "priority_level", "total_score", "why_this_area"]
+    {
+      "incident_id": "INC-02",
+      "assigned_teams": ["MAG-DAOP-01"],
+      "road_distance_km": 54.8,
+      "estimated_travel_time_min": 68,
+      "identified_water_source": {
+        "type": "RIVER_KAHAYAN",
+        "distance_m": 600,
+        "coordinates": [-2.7250, 114.3260]
       }
+    }
+  ]
+}
+```
+
+---
+
+### 4.5 Coordination Agent
+
+#### Purpose
+The **Coordination Agent** acts as the two-way operational bridge between the AI system and field personnel. It automates mission package delivery, tracks unit GPS telemetry, updates ETAs, resolves field-reported hurdles, and enforces safety escalation protocols when human lives or critical perimeters are threatened.
+
+#### Technical Parameters
+- **Python Variable:** `coordination_agent`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.2)`
+- **Tools:** `whatsapp_broadcast_tool`, `field_telemetry_tool`, `supervisor_alert_tool`
+- **Sub-Agents:** None
+
+#### Operational Protocols & Communication Channels
+- **WhatsApp Field Integration:** Dispatches concise, actionable mission briefings in Indonesian directly to team leaders' mobile devices via WhatsApp Business API. Includes Google Maps pin links, water source locations, and tactical hazards.
+- **Two-Way Message Parsing:** Ingests field SMS/WhatsApp replies (e.g., *"Jalan putus di KM 12, cari jalur alternatif"* or *"Pompa Mark-3 rusak, butuh unit cadangan"*).
+- **Automated Human Supervisor Escalation:**
+  - Fire perimeter breaches within $500\text{ m}$ of a village settlement boundary.
+  - Crew safety warnings: wind direction reverses, threatening to trap firefighting personnel in a peat pocket.
+  - Recommended civil evacuation orders (*Peringatan Dini Evakuasi Warga*).
+
+#### Input/Output Contract
+```json
+// Input: Field update from Team Leader
+{
+  "source": "FIELD_WHATSAPP",
+  "sender": "+6281234567890",
+  "team_id": "BPBD-REG-03",
+  "incident_id": "INC-01",
+  "message_text": "Jembatan kayu di parit 4 patah, mobil tangki tidak bisa lewat. Kami jalan kaki bawa pompa apung.",
+  "telemetry": { "lat": -2.8580, "lon": 114.1180, "timestamp": "2026-10-21T11:05:00Z" }
+}
+
+// Output: Coordination Action & Broadcast
+{
+  "action_type": "TACTICAL_ADAPTATION",
+  "crew_response": "Pesan diterima BPBD-REG-03. Posisi Anda 1.2 km dari titik api. Tim MPA-DESA-05 sedang merapat dari arah timur dengan selang tambahan.",
+  "system_action": "UPDATE_CREW_ETA",
+  "revised_eta_minutes": 55,
+  "escalate_to_supervisor": false,
+  "logged_road_hazard": {
+    "location": [-2.8580, 114.1180],
+    "hazard": "BROKEN_WOODEN_BRIDGE",
+    "vehicle_restriction": "ALL_VEHICLES_BLOCKED"
+  }
+}
+```
+
+---
+
+### 4.6 Feedback & Learning Agent
+
+#### Purpose
+The **Feedback & Learning Agent** performs post-incident retrospective analysis to drive continuous system improvement. It compares initial satellite confidence against field-verified reality, assesses whether prioritization was optimal, measures suppression duration, and calibrates scoring weights for subsequent operations.
+
+#### Technical Parameters
+- **Python Variable:** `feedback_learning`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.1)`
+- **Tools:** `incident_history_tool`, `weight_calibration_tool`, `audit_logger_tool`
+- **Sub-Agents:** None
+
+#### Learning Mechanics
+- **Perception Calibration:** If satellite thermal anomalies were flagged with $90\%$ confidence but field investigation confirmed agricultural stubble burned in a controlled clearing without peat combustion, the agent adjusts false-alarm penalties for that specific land parcel.
+- **Dynamic Weight Fine-Tuning:** If an incident ranked Priority 4 unexpectedly expanded into a major peat blaze because canal drainage depth was underweighted, the agent issues a calibrated weight proposal increasing the canal proximity factor in the **Risk Scoring Agent**.
+- **Audit Trails:** Maintains an immutable JSONL audit ledger documenting every prediction, verification step, dispatch command, and outcome.
+
+#### Input/Output Contract
+```json
+// Input: Post-incident closeout report
+{
+  "incident_id": "INC-01",
+  "closeout_timestamp": "2026-10-21T18:00:00Z",
+  "ground_truth_findings": {
+    "actual_fire_occurred": true,
+    "substrate_burned": "DEEP_PEAT",
+    "total_burned_area_ha": 4.8,
+    "containment_duration_hours": 5.2,
+    "initial_priority_score": 93.8,
+    "dispatch_success": true
+  }
+}
+
+// Output: Calibration & Feedback Directive
+{
+  "incident_evaluation": "SUCCESSFUL_PREDICTION",
+  "prediction_accuracy_score": 0.96,
+  "observations": "Perception and risk scoring performed accurately. Deep peat smoldering matched predicted spread. Travel time was underestimated by 13 minutes due to wooden bridge failure.",
+  "model_calibration_proposal": {
+    "target_agent": "risk_scoring",
+    "weight_modifications": {
+      "canal_drainage_proximity": "+0.05",
+      "historical_recurrence": "-0.05"
+    },
+    "routing_adjustment": {
+      "unpaved_track_speed_modifier": 0.75
     }
   }
 }
 ```
 
-#### Error Handling & Fallback Behavior
-- **Projection / CRS Distortion:** All area calculations automatically reproject WGS84 coordinates into the appropriate local UTM projection (e.g., UTM Zone 49S or 50S for Central Kalimantan) to prevent severe equatorial area distortions.
-- **Missing Risk Layers:** If the KLHK peatland layer or BPS settlement layer is unreachable or missing from local storage, the tool adjusts scoring weights across the remaining available variables and attaches a warning flag to the output.
-
 ---
 
-### 3.5 Evidence Evaluation Tool
+### 4.7 Wildfire Response Orchestrator (Root Agent)
 
 #### Purpose
-Analyzes the cumulative evidence accumulated in the investigation state. It validates data consistency across independent sources (e.g., checking if dNBR burn scars align spatially with FIRMS thermal clusters and U-Net segmentations) and determines whether the evidence is robust enough to draw definitive conclusions.
+The **Wildfire Response Orchestrator** (`root_agent`) is the master reasoning and sequencing engine of the SIGAP architecture. It coordinates the lifecycle of an emergency response, determines which sub-agent to invoke, reconciles intermediate findings, synthesizes executive situation reports (SITREP), and manages **system-wide re-planning**.
 
-#### Input Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "EvidenceEvaluationInput",
-  "type": "object",
-  "properties": {
-    "hotspot_data_available": { "type": "boolean" },
-    "hotspot_count": { "type": "integer" },
-    "satellite_imagery_quality": {
-      "type": "object",
-      "properties": {
-        "cloud_cover_percent": { "type": "number" },
-        "pre_post_gap_days": { "type": "integer" },
-        "sensor": { "type": "string" }
-      },
-      "required": ["cloud_cover_percent", "pre_post_gap_days"]
-    },
-    "unet_segmentation_available": { "type": "boolean" },
-    "unet_mean_confidence": { "type": "number" },
-    "dnbr_data_available": { "type": "boolean" },
-    "spatial_cross_correlation": {
-      "type": "number",
-      "description": "IoU between hotspot buffer and segmentation mask"
-    }
-  },
-  "required": ["hotspot_data_available", "unet_segmentation_available", "dnbr_data_available"]
-}
+#### Technical Parameters
+- **Python Variable:** `root_agent`
+- **Model:** `GlobalGemini(model="gemini-3.5-flash", temperature=0.1)`
+- **Tools:** `compile_sitrep_tool`, `publish_bulletin_tool`
+- **Sub-Agents:** Coordinates all 6 specialized domain agents; also directly controls `root_search_agent` and `root_url_agent` for top-level regulatory and meteorological inquiries.
+
+#### Delegation Pattern
+```text
+                  [User Request / Hotspot Trigger]
+                                 │
+                                 ▼
+                     [Wildfire Response Orchestrator]
+                                 │
+     ┌───────────────────────────┼───────────────────────────┐
+     ▼                           ▼                           ▼
+[1. Perception & Fusion] ──► [2. Risk Scoring] ──► [3. Verification Agent]
+                                                             │
+                                                             ▼
+                                                 [Confirmation Granted?]
+                                                 ├── YES ──► [4. Routing & Dispatch]
+                                                 │                 │
+                                                 │                 ▼
+                                                 │           [5. Coordination Agent]
+                                                 └── NO  ──► [Task Drone/Scout]
 ```
 
-#### Output Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "EvidenceEvaluationOutput",
-  "type": "object",
-  "properties": {
-    "evidence_quality_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-    "confidence_level": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW", "INSUFFICIENT"] },
-    "missing_data": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "recommendations": {
-      "type": "array",
-      "items": { "type": "string" }
-    },
-    "can_finalize_conclusions": { "type": "boolean" }
-  },
-  "required": ["evidence_quality_score", "confidence_level", "can_finalize_conclusions"]
-}
-```
-
-#### Error Handling & Fallback Behavior
-- **Missing Imagery Data:** If only FIRMS hotspots exist (due to permanent cloud obstruction), the tool outputs `confidence_level: "LOW"`, sets `can_finalize_conclusions: false`, and directs the Orchestrator to report *"Thermal anomaly indicators only; burned area estimation cannot be verified without optical imagery"*.
+#### Dynamic Re-Planning Architecture
+When environmental or operational conditions undergo a critical state shift, the Orchestrator does **not** patch the plan with local heuristics. It performs a **systemic re-planning cycle**:
+1. **Trigger Event:** Perception Agent detects a new cluster with extreme FRP ($> 200\text{ MW}$) within $1\text{ km}$ of a major settlement, or Coordination Agent logs a sudden gale-force wind shift.
+2. **Interrupt & Freeze:** Orchestrator sends an interrupt signal to all active agents, freezing non-committed dispatches.
+3. **Re-Score:** Re-invokes `risk_scoring` over all active incidents simultaneously.
+4. **Re-Optimize Fleet:** Re-invokes `routing_dispatch` with the updated incident priorities and real-time team coordinates.
+5. **Re-Issue Directives:** Transmits revised route orders to teams in transit and notifies regional human commanders.
 
 ---
 
-### 3.6 Report Generator Tool
+## 5. Workflow & Decision Flow
 
-#### Purpose
-Compiles all structured findings, spatial layers, maps, and agent decision logs into exportable artifacts formatted for decision-makers and GIS field teams.
-
-#### Input Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReportGeneratorInput",
-  "type": "object",
-  "properties": {
-    "investigation_id": { "type": "string" },
-    "investigation_state": { "type": "object" },
-    "language": { "type": "string", "enum": ["id", "en"], "default": "id" },
-    "formats": {
-      "type": "array",
-      "items": { "type": "string", "enum": ["PDF", "JSON", "GEOJSON", "GEOTIFF"] },
-      "default": ["PDF", "GEOJSON"]
-    },
-    "author_notes": { "type": "string" }
-  },
-  "required": ["investigation_id", "investigation_state"]
-}
-```
-
-#### Output Schema
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ReportGeneratorOutput",
-  "type": "object",
-  "properties": {
-    "report_pdf_path": { "type": "string" },
-    "geojson_path": { "type": "string" },
-    "geotiff_bundle_path": { "type": "string" },
-    "executive_summary_id": { "type": "string", "description": "Formatted Indonesian executive summary text" },
-    "status": { "type": "string", "enum": ["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] }
-  },
-  "required": ["report_pdf_path", "executive_summary_id", "status"]
-}
-```
-
-#### Error Handling & Fallback Behavior
-- **PDF Engine Crash:** Falls back to generating a GitHub-flavored Markdown and HTML report package if headless PDF compilation (e.g., WeasyPrint or ReportLab) fails.
-- **Disk Full / Write Permissions:** Attempts write to OS temporary directory (`scratch/`) and emits notification.
-
----
-
-## 4. Agent Decision Flow
-
-The following sequence details how the LLM Orchestrator autonomously maneuvers through the entire investigation lifecycle, adapting dynamically based on data quality and intermediate evaluation points.
-
-### 4.1 End-to-End Decision Flowchart
+### 5.1 End-to-End Agentic Lifecycle Diagram
 
 ```mermaid
 flowchart TD
-    Start([User issues NL Command in Indonesian]) --> ParseIntent[Parse Location, Timeframe, & Objective]
-    ParseIntent --> CreatePlan[Generate Dynamic Investigation Plan]
-    CreatePlan --> CallFIRMS[Call FIRMS Tool: Fetch Hotspots & Cluster]
+    Start([New Satellite Data / Incident Trigger]) --> Step1[1. Ingest Data & Run Perception Fusion]
+    
+    subgraph S1["Perception & Fusion Agent"]
+        Step1 --> CheckCred{P_fire >= 0.40?}
+        CheckCred -- No --> LogDismiss[Log as Industrial / Glint / Low Credibility]
+        LogDismiss --> Terminate([End Cycle])
+        CheckCred -- Yes --> CredibleHotspot[Generate Fused Incident Cluster]
+    end
 
-    CallFIRMS --> CheckHotspots{Hotspots detected?}
-    CheckHotspots -- No --> NoHotspotNotice[Report: No thermal anomalies detected\nConfirm with user to expand timeframe]
-    NoHotspotNotice --> End([End Investigation / Await Input])
+    CredibleHotspot --> Step2[2. Evaluate Macro Priority]
 
-    CheckHotspots -- Yes --> ClusterAOI[Formulate Cluster AOIs & Bounding Boxes]
-    ClusterAOI --> CallGEE[Call GEE Tool: Retrieve Pre/Post Satellite Scenes]
+    subgraph S2["Risk Scoring Agent"]
+        Step2 --> DynamicWeights[Compute Contextual Weights based on Season & Wind]
+        DynamicWeights --> MCDAScore[Score Incident Relative to ALL Active Incidents]
+    end
 
-    CallGEE --> CloudCheck{Cloud cover <= 20%?}
-    CloudCheck -- No --> AltDateCheck{Alternative dates / composites available?}
-    AltDateCheck -- Yes --> ShiftWindow[Shift Date Range +7/+14 days OR\nGenerate Temporal Median Composite]
-    ShiftWindow --> CallGEE
-    AltDateCheck -- No --> CloudDegraded[Log limitation: Optical imagery obscured\nFlag degraded investigation mode]
-    CloudDegraded --> PartialSummary[Synthesize Hotspot-Only Evidence Card]
-    PartialSummary --> GenReport
+    MCDAScore --> Step3[3. Pre-Dispatch Verification Assessment]
 
-    CloudCheck -- Yes --> CallUNet[Call U-Net Inference Tool: Segment Burned Area]
-    CallUNet --> ConfCheck{Mean confidence >= 0.40?}
-    ConfCheck -- No --> LowConfFlag[Flag Burn Scars as Low-Confidence / Tentative]
-    LowConfFlag --> CallGeo[Call Geospatial Tool: dNBR & Risk Overlays]
-    ConfCheck -- Yes --> CallGeo
+    subgraph S3["Verification Agent"]
+        Step3 --> DecisionBranch{P_fire >= 0.85 OR<br/>Risk >= 80?}
+        DecisionBranch -- No --> ReconRequired[Dispatch Drone Recon / Ping MPA Scout]
+        ReconRequired --> AwaitRecon{Recon Confirmed?}
+        AwaitRecon -- No --> CancelDispatch[Cancel Operation & Log False Alarm]
+        CancelDispatch --> Step6[6. Feedback & Learning Evaluation]
+        AwaitRecon -- Yes --> VerificationPassed[Verification Confirmed]
+    end
 
-    CallGeo --> CalcDNBR[Calculate dNBR & Burn Severity Classes]
-    CalcDNBR --> OverlayRisks[Overlay Peatland Layer & Settlement Proximity]
-    OverlayRisks --> RankPriority[Compute Multi-Criteria Priority Scores & 'Why This Area?']
-    RankPriority --> CallEvidence[Call Evidence Evaluation Tool]
+    DecisionBranch -- Yes --> VerificationPassed
+    VerificationPassed --> Step4[4. Solve Fleet Assignment]
 
-    CallEvidence --> SufficientCheck{Evidence sufficient for conclusions?}
-    SufficientCheck -- No --> NoteLimitations[Document data gaps & specify field verification requirements]
-    NoteLimitations --> GenReport[Call Report Generator: PDF, GeoJSON, Maps]
-    SufficientCheck -- Yes --> SynthesizeFindings[Formulate comprehensive analytical synthesis]
-    SynthesizeFindings --> GenReport
+    subgraph S4["Routing & Dispatch Agent"]
+        Step4 --> NetworkGraph[Compute Road Topology & Water Supplies]
+        NetworkGraph --> GlobalOpt[Solve Many-to-Many Fleet Assignment]
+    end
 
-    GenReport --> DisplayWorkspace[Publish to Dashboard & AI Investigation Workspace]
-    DisplayWorkspace --> HITLReview[Human-in-the-Loop Review & Field Dispatch Decision]
-    HITLReview --> End
+    GlobalOpt --> Step5[5. Execute Field Coordination]
+
+    subgraph S5["Coordination Agent & Execution"]
+        Step5 --> SendWA[Send WhatsApp Mission Orders to Team Leaders]
+        SendWA --> MonitorTrack[Track Field GPS & Inbound Status Telemetry]
+        MonitorTrack --> CritChange{Critical Change Detected?<br/>New Flare-up / Road Cut / Wind Shift}
+    end
+
+    CritChange -- Yes --> ReplanLoop[Loop Back to Step 2: Systemic Re-plan]
+    ReplanLoop ==> Step2
+
+    CritChange -- No --> FireContained{Fire Contained & Mapped?}
+    FireContained -- No --> MonitorTrack
+    FireContained -- Yes --> Step6
+
+    subgraph S6["Feedback & Learning Agent"]
+        Step6 --> PostMortem[Audit Accuracy vs Prediction & Field Loss]
+        PostMortem --> CalibrateWeights[Update Risk Scoring Weights & Cache]
+    end
+
+    CalibrateWeights --> Finish([Investigation Cycle Complete])
 ```
-
-### 4.2 Key Decision Points Explained
-
-1. **Hotspot Detection Branch:** When FIRMS queries return zero hotspots, the agent does not immediately abort. It evaluates whether the user's temporal window was too narrow (e.g., single day) and queries whether to expand the window to 14 or 30 days before reporting a clean bill of health.
-2. **Cloud Cover & Optical Degradation Branch:** Indonesia's equatorial location produces persistent tropical cumulus clouds. If cloud cover exceeds the 20% threshold, the agent enters an autonomous recovery loop:
-   - *Attempt 1:* Queries Landsat scenes in an expanded post-fire window (+7 to +14 days).
-   - *Attempt 2:* Requests a GEE temporal median composite over a 30-day window to eliminate cloud transients.
-   - *Attempt 3:* Switches to Sentinel-2 (if available) for higher temporal revisit cadence.
-   - *Final Fallback:* If all optical attempts fail, the agent logs an explicit cloud limitation, avoids guessing burned area acreage, and relies strictly on thermal anomaly clusters and peatland vulnerability maps.
-3. **Model Prediction Confidence Gate:** If U-Net returns predictions with low confidence (< 0.40), the agent avoids reporting firm hectare statistics. Instead, it marks the polygon with a visual caveat: *"Dugaan area terbakar dengan keyakinan rendah (perlu konfirmasi lapangan)"*.
-4. **Evidence Sufficiency Gate:** Before compiling the final report, the Evidence Evaluation tool checks for multi-sensor corroboration. A burned area is considered high-confidence only when thermal anomalies, dNBR spectral shifts, and U-Net segmentations align spatially. Discrepancies are highlighted as open questions for human reviewers.
 
 ---
 
-## 5. Investigation State Schema
+## 6. Tool Integration
 
-The entire state of an ongoing investigation is structured as a strongly typed object. Below is the reference Python/Pydantic implementation and corresponding JSON specification.
+### 6.1 Architecture: How ADK Tools Wrap the `data/` Layer
+SIGAP follows clean architectural separation: heavy mathematical calculations, remote sensing downloads, database queries, and neural network inference reside in standalone Python modules inside `data/` and `ml/`. 
 
-### 5.1 Python Specification (Pydantic V2)
+The `agent/tools/` layer contains **ADK tool wrappers**. These wrappers:
+1. Translate JSON arguments from the Gemini model into validated Python parameters using Pydantic.
+2. Execute the deterministic domain functions.
+3. Handle exceptions, apply timeouts, and format outputs into concise, structured dictionaries optimal for LLM context consumption.
+
+```
++─────────────────────────────────────────────────────────────+
+|               Google ADK Multi-Agent Core                   |
+|           (Gemini 3.5 Flash via GlobalGemini)               |
++─────────────────────────────────────────────────────────────+
+                               │
+                Function Call / JSON Schema
+                               ▼
++─────────────────────────────────────────────────────────────+
+|                     ADK Tool Wrappers                       |
+|           (Decorated with @agent_tool or Tool)              |
++─────────────────────────────────────────────────────────────+
+                               │
+               Typed Python Method Calls & Arrays
+                               ▼
++──────────────────────────────┬──────────────────────────────+
+|    data/ Layer Modules       |     ml/ Deep Learning Layer  |
+|  - data/firms/client.py      |   - ml/unet/predict.py       |
+|  - data/earth_engine/client  |   - ml/unet/postprocessing.py|
+|  - data/geospatial/dnbr.py   |   - ml/unet/model.py         |
+|  - data/geospatial/priority  |                              |
++──────────────────────────────┴──────────────────────────────+
+```
+
+### 6.2 Tool Inventory
+
+| Tool Name | Assigned Agent | Underlying Module | Description |
+|---|---|---|---|
+| `firms_query_tool` | `perception_fusion` | `data.firms.client.FIRMSClient` | Asynchronously queries NASA FIRMS API for VIIRS/MODIS thermal anomalies across specified bounding boxes. |
+| `sipongi_sync_tool` | `perception_fusion` | `data.firms.sipongi_client` | Synchronizes official KLHK Sipongi hotspot reports and ground-truthed field logs. |
+| `bmkg_weather_tool` | `perception_fusion`, `risk_scoring` | `data.weather.bmkg_client` | Retrieves real-time wind speed, wind azimuth, relative humidity, and Fire Weather Index (FWI) metrics. |
+| `dbscan_cluster_tool`| `perception_fusion` | `data.geospatial.clustering` | Applies spherical Haversine DBSCAN to cluster raw points into cohesive fire fronts and centroids. |
+| `peatland_overlay_tool`| `risk_scoring` | `data.geospatial.priority` | Intersects incident boundaries with KLHK peat thickness rasters ($< 1\text{m}$, $1\text{--}2\text{m}$, $> 3\text{m}$). |
+| `settlement_proximity_tool`| `risk_scoring`| `data.geospatial.priority` | Measures road and Euclidean buffers to BPS human settlements and vital infrastructure. |
+| `wind_dispersion_tool` | `risk_scoring` | `data.geospatial.dispersion` | Generates smoke dispersion cones predicting PM2.5 transport toward urban areas over $6\text{--}24$ hours. |
+| `gee_imagery_tool` | `verification_agent` | `data.earth_engine.client.GEEClient` | Fetches pre/post Landsat 8/9 and Sentinel-2 surface reflectance scenes with QA pixel cloud masking. |
+| `unet_segment_tool` | `verification_agent` | `ml.unet.predict.predict_burned_area` | Runs 6-band deep convolutional U-Net inference to segment burn scars and compute precise hectares. |
+| `road_network_routing_tool`| `routing_dispatch`| `data.routing.osrm_engine` | Solves turn-by-turn routing over road networks, enforcing bridge tonnage and road surface constraints. |
+| `water_source_finder_tool` | `routing_dispatch`| `data.geospatial.hydrology` | Locates verified canal blocks (*sekat kanal*), rivers, and retention ponds within tactical hose range. |
+| `whatsapp_broadcast_tool` | `coordination_agent`| `data.comms.whatsapp_client` | Formats and transmits mission orders and geospatial coordinates to field crew smart devices. |
+| `supervisor_alert_tool` | `coordination_agent`| `data.comms.alert_service` | Escalates life-safety risks, community evacuation alerts, or cross-border smoke alerts to commanders. |
+| `weight_calibration_tool` | `feedback_learning` | `data.geospatial.priority` | Dynamically updates and persists baseline factor weights for the multi-criteria risk scoring engine. |
+
+### 6.3 Defining Custom Tools with the `@agent_tool` Decorator
+
+Google ADK allows exposing clean, type-annotated Python functions directly to agents using the `@agent_tool` decorator. The decorator automatically extracts function docstrings, argument types, and default values to compile the OpenAPI-compliant JSON tool declaration.
 
 ```python
-from datetime import datetime, date
-from typing import List, Dict, Optional, Any, Literal
+"""sigap/agent/tools/custom_tool_example.py
+
+Demonstrates how to build an ADK tool wrapping the underlying data/ layer.
+"""
+
+from typing import Dict, Any, List
+from google.adk.tools import agent_tool
 from pydantic import BaseModel, Field
 
-class ParsedIntent(BaseModel):
-    raw_query: str
-    admin_region: Optional[str] = None
-    bbox: Optional[List[float]] = Field(None, min_length=4, max_length=4)
-    date_start: date
-    date_end: date
-    primary_objective: Literal["GENERAL_INVESTIGATION", "BURNED_AREA_ESTIMATE", "PATROL_PRIORITIZATION"]
-    user_constraints: List[str] = Field(default_factory=list)
 
-class PlanStep(BaseModel):
-    step_id: int
-    name: str
-    tool_name: str
-    status: Literal["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "SKIPPED"] = "PENDING"
-    retry_count: int = 0
-    max_retries: int = 3
-    output_summary: Optional[str] = None
+class HotspotQueryArgs(BaseModel):
+    bbox: List[float] = Field(
+        ...,
+        description="Bounding box [min_lon, min_lat, max_lon, max_lat] in EPSG:4326",
+        min_length=4,
+        max_length=4,
+    )
+    days_back: int = Field(default=1, description="Number of historical days to query (1-10)")
+    min_confidence: str = Field(default="nominal", description="Minimum confidence: 'low', 'nominal', 'high'")
 
-class HotspotCluster(BaseModel):
-    cluster_id: str
-    centroid: List[float]
-    hotspot_count: int
-    mean_frp: float
-    max_frp: float
-    bbox: List[float]
 
-class HotspotState(BaseModel):
-    total_detected: int = 0
-    clusters: List[HotspotCluster] = Field(default_factory=list)
-    raw_data_uri: Optional[str] = None
+@agent_tool(
+    name="query_firms_hotspots",
+    description="Queries NASA FIRMS near-real-time satellite thermal anomalies across a geographic bounding box.",
+)
+async def query_firms_hotspots(
+    bbox: List[float],
+    days_back: int = 1,
+    min_confidence: str = "nominal",
+) -> Dict[str, Any]:
+    """Execute asynchronous query against NASA FIRMS and return clustered hotspots."""
+    from data.firms.client import FIRMSClient
+    from data.geospatial.clustering import cluster_hotspots_haversine
+    import os
 
-class SceneMetadata(BaseModel):
-    scene_id: str
-    satellite: str
-    acquisition_date: date
-    cloud_cover_percent: float
-    raster_uri: str
+    api_key = os.getenv("FIRMS_MAP_KEY")
+    if not api_key:
+        return {
+            "status": "ERROR",
+            "error_code": "AUTH_CONFIG_MISSING",
+            "message": "FIRMS_MAP_KEY environment variable is not configured on the host.",
+        }
 
-class ImageryState(BaseModel):
-    status: Literal["NOT_FETCHED", "SUCCESS", "CLOUD_DEGRADED", "FAILED"] = "NOT_FETCHED"
-    before_scene: Optional[SceneMetadata] = None
-    after_scene: Optional[SceneMetadata] = None
-    composite_method_used: Optional[str] = None
-    fallback_attempts: int = 0
+    client = FIRMSClient(api_key=api_key)
+    try:
+        raw_hotspots = await client.get_area_hotspots(
+            bbox=bbox,
+            days=days_back,
+            source="VIIRS_SNPP_NRT",
+        )
+        
+        # Filter confidence
+        filtered = [h for h in raw_hotspots if h.get("confidence") == min_confidence or min_confidence == "all"]
+        
+        # Spatial DBSCAN clustering via data/ layer
+        clusters = cluster_hotspots_haversine(filtered, eps_km=2.0, min_samples=2)
 
-class SegmentationState(BaseModel):
-    executed: bool = False
-    estimated_area_ha: float = 0.0
-    mean_confidence: float = 0.0
-    mask_raster_uri: Optional[str] = None
-    polygons_geojson_uri: Optional[str] = None
-
-class DnbrState(BaseModel):
-    executed: bool = False
-    mean_dnbr: float = 0.0
-    dnbr_raster_uri: Optional[str] = None
-    severity_breakdown_ha: Dict[str, float] = Field(default_factory=dict)
-
-class PriorityCandidate(BaseModel):
-    candidate_id: str
-    rank: int
-    priority_level: Literal["HIGH", "MEDIUM", "LOW"]
-    total_score: float
-    is_peatland: bool
-    distance_to_settlement_km: float
-    why_this_area: str
-
-class EvidenceAssessment(BaseModel):
-    quality_score: float = 0.0
-    confidence_level: Literal["HIGH", "MEDIUM", "LOW", "INSUFFICIENT"] = "LOW"
-    missing_data: List[str] = Field(default_factory=list)
-    limitations: List[str] = Field(default_factory=list)
-    can_conclude: bool = False
-
-class DecisionLogEntry(BaseModel):
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    step_id: int
-    action_taken: str
-    reasoning: str
-    alternatives_considered: Optional[str] = None
-
-class InvestigationState(BaseModel):
-    investigation_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    status: Literal["PLANNING", "EXECUTING", "EVALUATING", "COMPLETED", "FAILED"] = "PLANNING"
-    intent: ParsedIntent
-    plan: List[PlanStep] = Field(default_factory=list)
-    hotspots: HotspotState = Field(default_factory=HotspotState)
-    imagery: ImageryState = Field(default_factory=ImageryState)
-    segmentation: SegmentationState = Field(default_factory=SegmentationState)
-    dnbr: DnbrState = Field(default_factory=DnbrState)
-    priority_ranking: List[PriorityCandidate] = Field(default_factory=list)
-    evidence: EvidenceAssessment = Field(default_factory=EvidenceAssessment)
-    decision_log: List[DecisionLogEntry] = Field(default_factory=list)
-    human_verification_status: Literal["UNVERIFIED", "CONFIRMED", "REJECTED", "NEEDS_FIELD_CHECK"] = "UNVERIFIED"
-    human_notes: Optional[str] = None
-```
-
-### 5.2 JSON State Sample
-
-```json
-{
-  "investigation_id": "inv-20261021-pulangpisau-01",
-  "status": "COMPLETED",
-  "intent": {
-    "raw_query": "Analisis potensi kebakaran di Pulang Pisau selama tujuh hari terakhir.",
-    "admin_region": "Pulang Pisau",
-    "bbox": [113.82, -3.25, 114.45, -2.55],
-    "date_start": "2026-10-14",
-    "date_end": "2026-10-21",
-    "primary_objective": "PATROL_PRIORITIZATION"
-  },
-  "plan": [
-    { "step_id": 1, "name": "Fetch FIRMS Hotspots", "tool_name": "firms_tool", "status": "COMPLETED" },
-    { "step_id": 2, "name": "Retrieve GEE Satellite Imagery", "tool_name": "ee_tool", "status": "COMPLETED" },
-    { "step_id": 3, "name": "U-Net Burned Area Segmentation", "tool_name": "unet_tool", "status": "COMPLETED" },
-    { "step_id": 4, "name": "Geospatial Overlay & Priority Scoring", "tool_name": "geospatial_tool", "status": "COMPLETED" },
-    { "step_id": 5, "name": "Evidence Assessment", "tool_name": "evidence_tool", "status": "COMPLETED" },
-    { "step_id": 6, "name": "Generate Investigation Report", "tool_name": "report_tool", "status": "COMPLETED" }
-  ],
-  "hotspots": {
-    "total_detected": 42,
-    "clusters": [
-      {
-        "cluster_id": "C-1",
-        "centroid": [114.12, -2.85],
-        "hotspot_count": 28,
-        "mean_frp": 34.5,
-        "max_frp": 88.2,
-        "bbox": [114.08, -2.89, 114.16, -2.81]
-      }
-    ]
-  },
-  "imagery": {
-    "status": "SUCCESS",
-    "before_scene": {
-      "scene_id": "LC09_L2SP_118062_20260920",
-      "satellite": "Landsat 9",
-      "acquisition_date": "2026-09-20",
-      "cloud_cover_percent": 8.4,
-      "raster_uri": "/data/imagery/LC09_before.tif"
-    },
-    "after_scene": {
-      "scene_id": "LC09_L2SP_118062_20261018",
-      "satellite": "Landsat 9",
-      "acquisition_date": "2026-10-18",
-      "cloud_cover_percent": 14.2,
-      "raster_uri": "/data/imagery/LC09_after.tif"
-    },
-    "fallback_attempts": 1
-  },
-  "segmentation": {
-    "executed": true,
-    "estimated_area_ha": 342.5,
-    "mean_confidence": 0.86,
-    "polygons_geojson_uri": "/data/vectors/burned_polygons.geojson"
-  },
-  "priority_ranking": [
-    {
-      "candidate_id": "C-1",
-      "rank": 1,
-      "priority_level": "HIGH",
-      "total_score": 0.89,
-      "is_peatland": true,
-      "distance_to_settlement_km": 1.4,
-      "why_this_area": "Located directly on deep peatland (KLHK layer), 1.4 km from residential settlements, with 28 recurrent hotspots and mean dNBR 0.54."
-    }
-  ],
-  "decision_log": [
-    {
-      "step_id": 2,
-      "action_taken": "Extended acquisition window by 7 days",
-      "reasoning": "Initial post-event scene on 2026-10-15 exhibited 42% cloud occlusion over cluster C-1. Retrieved clear scene from 2026-10-18."
-    }
-  ],
-  "human_verification_status": "NEEDS_FIELD_CHECK"
-}
+        return {
+            "status": "SUCCESS",
+            "total_raw": len(raw_hotspots),
+            "total_filtered": len(filtered),
+            "cluster_count": len(clusters),
+            "clusters": clusters,
+        }
+    except Exception as exc:
+        return {
+            "status": "FAILED",
+            "error_type": type(exc).__name__,
+            "message": str(exc),
+        }
 ```
 
 ---
 
-## 6. Recovery & Uncertainty Handling
+## 7. Recovery & Adaptation
 
-Field deployments in tropical peatland environments encounter frequent data gaps, sensor failures, and severe weather. The agent does not halt on anomalies; it executes structured fallback behaviors and transparently logs limitations.
+Disaster monitoring environments are inherently prone to sensor disruptions, cloud interference, and network outages. SIGAP incorporates multi-layer recovery patterns to guarantee uninterrupted decision support.
 
-### 6.1 Recovery Matrix (Spec Section 2.7)
+```
++────────────────────────────────────────────────────────────────────────────────────────────────----+
+|                                    FAILURE RECOVERY MATRIX                                         |
++────────────────────────────────────────────────────────────────────────────────────────────────----+
+| Failure Mode          | Detection Mechanism            | Autonomous Recovery Strategy              |
++────────────────-------+--------------------------------+-------------------------------------------+
+| Severe Cloud Cover    | GEE Tool returns >20% QA_PIXEL | 1. Expand temporal window by 7-14 days    |
+| (Equatorial Tropics)  | cloud occlusion in AOI         | 2. Switch to Sentinel-1 SAR radar imagery |
+|                       |                                | 3. Fallback to thermal-only risk scoring  |
++────────────────-------+--------------------------------+-------------------------------------------+
+| External API Outage   | HTTP 5xx / 429 Rate Limit      | Circuit breaker activates; pivots to      |
+| (FIRMS / Sipongi)     | Timeout > 30 seconds           | cached Redis thermal store & BMKG alerts  |
++────────────────-------+--------------------------------+-------------------------------------------+
+| GPU CUDA Out-Of-Memory| PyTorch CUDA OOM exception     | Tiling manager slices scene into 512x512  |
+| (U-Net Inference)     | during large scene inferencing | patches with overlapping boundary blend   |
++────────────────-------+--------------------------------+-------------------------------------------+
+| Foundation Model Error| Gemini 3.5 API rate limit or   | Exponential backoff with jitter (3 tries);|
+|                       | JSON schema validation error   | falls back to deterministic heuristic MCDA|
++────────────────-------+--------------------------------+-------------------------------------------+
+| Road Network Cut Off  | Field WhatsApp report / OSRM   | Flags node as impassable; recalculates    |
+| (Bridge Collapsed)    | impassable edge response       | multi-crew route via secondary tracks     |
++────────────────-------+--------------------------------+-------------------------------------------+
+```
 
-| Condition Encountered | Agent Detection Mechanism | Autonomous Agent Response & Recovery Strategy | Max Retries / Limits |
-|---|---|---|---|
-| **Satellite scene obscured by clouds** | `aoi_cloud_coverage_after > 20%` reported by Earth Engine Tool | 1. Query alternative dates (+7 to +14 days).<br>2. Generate temporal median composite.<br>3. Switch sensor (Landsat $\rightarrow$ Sentinel-2). | Up to 3 attempts before switching to degraded mode |
-| **No usable post-event optical imagery** | Earth Engine Tool returns `NO_SCENES_FOUND` after all window expansions | Degrade to Thermal-Only Analysis. Report hotspot progression, cluster density, and peatland intersection; state clearly that optical area cannot be calculated. | Immediate transition after window check |
-| **External API failure / Rate limit** | HTTP 429 / 503 or socket timeout from FIRMS or GEE | Apply exponential backoff with jitter (2s, 4s, 8s); attempt secondary mirrors if available. | 3 attempts per tool |
-| **Model segmentation confidence low** | `mean_confidence < 0.40` or patchy mask prediction | Do not output definitive scar figures. Tag polygons as tentative indications; recommend direct field or drone inspection. | 1 pass (no model hallucination) |
-| **Only thermal hotspot data available** | GEE unreachable or total cloud cover across entire region | Generate hotspot cluster report; compute proximity to peat/settlements; explicitly withhold burned area claims. | Deterministic fallback |
+### 7.1 Circuit Breakers & Retry Policies
+All external network interactions (FIRMS, GEE, Sipongi, WhatsApp API) are governed by an adaptive circuit breaker pattern:
+- **Max Retries:** 3 attempts with exponential backoff ($2^n \text{ seconds}$) and $\pm 20\%$ jitter.
+- **Circuit State Transition:** 5 consecutive failures trips the breaker to `OPEN` for 180 seconds. While open, the agent is supplied with synthetic degradation metadata, allowing it to complete reasoning without freezing the operational loop.
 
-### 6.2 Retry and Circuit Breaker Strategy
+### 7.2 Continuous Risk Score Weight Learning
+The system prevents drift through the **Feedback & Learning Agent**:
+1. When field personnel mark an incident as resolved, the actual fire perimeter is digitized.
+2. The agent calculates the **Brier Score** for the initial fire probability:
+   $$\text{BS} = \frac{1}{N} \sum_{t=1}^N (P_t - o_t)^2$$
+3. If the Brier Score exceeds $0.15$ over a 7-day rolling window, the agent initiates weight re-calibration, suppressing over-sensitive sensor feeds and recalibrating the baseline priors.
+
+---
+
+## 8. Human-in-the-Loop (HITL)
+
+Agentic automation in SIGAP empowers field officers rather than supplanting command authority. The system operates under strict **human-in-the-loop boundaries**, reserving high-stakes decisions for accredited human supervisors.
 
 ```mermaid
-flowchart TD
-    InvokeTool[Agent Invokes Tool] --> Execute{Execution Successful?}
-    Execute -- Yes --> UpdateState[Update State & Reset Retry Counter]
-    Execute -- No --> CheckRetries{Attempts < Max Retries?}
+stateDiagram-v2
+    [*] --> Ingested: Satellite Hotspot Detected
+    Ingested --> Unconfirmed: Perception Fusion Processing
     
-    CheckRetries -- Yes --> SleepBackoff[Exponential Backoff Wait\nDelay = 2^attempt + jitter]
-    SleepBackoff --> AlterParams[Agent alters query params e.g. wider date window]
-    AlterParams --> InvokeTool
-
-    CheckRetries -- No --> CircuitOpen[Trigger Circuit Breaker / Graceful Degradation]
-    CircuitOpen --> LogFailure[Log Failure Trace in Decision Log]
-    LogFailure --> DegradedFallback[Execute Fallback Tactic e.g. Hotspot-Only Mode]
-    DegradedFallback --> UpdateState
-```
-
-### 6.3 Communicating Uncertainty to End Users
-
-The agent enforces strict linguistic and visual guardrails to ensure operators never mistake probabilistic AI outputs for confirmed ground reality:
-- **Terminology Separation:**
-  - *Thermal Anomaly / Hotspot:* "Indikasi anomali termal" (not confirmed fire).
-  - *Segmented Polygon:* "Dugaan area terbakar berdasarkan prediksi model" (not field-verified perimeter).
-  - *dNBR Class:* "Indikasi perubahan spektral vegetasi" (not absolute destruction).
-- **Error Margins:** Area calculations include spatial resolution bounds (e.g., *"Estimasi luas: $342.5\text{ ha} \pm 18.2\text{ ha}$"*).
-- **Transparency Flags:** Prominently displays data age, sensor source, and cloud occlusion percentage on every summary card.
-
----
-
-## 7. Prompt Architecture
-
-### 7.1 System Prompt Design Principles
-
-1. **Indonesian Language Primacy:** All user-facing explanations, conversation replies, executive summaries, and "Why This Area?" rationales must be generated in professional, standard Indonesian (*Bahasa Indonesia formal/baku*), matching the terminology of BPBD and Manggala Agni.
-2. **Tool-Calling Discipline:** Internal reasoning and tool arguments must strictly comply with JSON Schema contracts. The agent must never produce tool arguments wrapped in conversational filler.
-3. **Evidence-Grounded Restraint:** The agent is explicitly forbidden from inventing unobserved satellite dates, fabricating hectare numbers, or upgrading an unverified hotspot to a "confirmed wildfire" without corroborating evidence.
-4. **Structured Multi-Turn Memory:** The system prompt instructs the agent to maintain and update the `InvestigationState` object, citing previous tool outputs explicitly rather than relying on fuzzy context memory.
-
-### 7.2 Reference System Prompt
-
-```text
-You are Agen Karhutla, the specialized AI Orchestrator for the SIGAP autonomous wildfire investigation platform in Indonesia. Your role is to plan, coordinate, and execute scientific investigations of suspected wildfires on behalf of disaster response officers (BPBD, Manggala Agni, KPH).
-
-OPERATING PRINCIPLES:
-1. You interact with users in professional, objective Bahasa Indonesia.
-2. You do not guess or hallucinate remote sensing figures. All coordinates, hotspot counts, hectare areas, and dNBR scores must originate from tool executions.
-3. Thermal hotspots indicate thermal anomalies, not confirmed fires.
-4. U-Net segmentation provides model-based estimates, not ground truth.
-5. If satellite imagery is obscured by clouds (> 20%), you MUST autonomously seek alternative dates or temporal composites before drawing conclusions.
-6. If optical evidence cannot be acquired, report the limitation honestly and fall back to hotspot spatial analysis.
-7. Always explain the physical reasoning behind priority rankings using the 'Why This Area?' framework.
-
-TOOL CALLING:
-Emit only valid tool calls matching the registered JSON schemas. When reviewing tool outputs, record your assessment in the investigation decision log before proceeding to the next step.
-```
-
-### 7.3 Clarification vs. Autonomous Execution Guidelines
-
-```
-+-----------------------------------------------------------------------------------+
-|                        AUTONOMY vs. CLARIFICATION MATRIX                          |
-+-----------------------------------------------------------------------------------+
-| Scenario                                | Autonomous Action | Ask Human Clarification |
-+-----------------------------------------+-------------------+-------------------------+
-| User gives region without explicit dates| Auto-default to   | No                      |
-|                                         | last 7 days       |                         |
-| Region name is ambiguous (e.g. "Sungai  | Halt query        | Yes (Prompt user to     |
-| Raya" in multiple provinces)            |                   | specify regency/province)|
-| Cloud cover > 20% on primary scene      | Auto-try +7/+14 d | No (Execute recovery    |
-|                                         | or median comp.   | and inform in log)      |
-| Severe sensor conflict (Hotspots high,  | Flag discrepancy; | Yes (Recommend ground   |
-| dNBR shows unburned/flooded)            | request ground    | patrol verification)    |
-|                                         | verification      |                         |
-| Physical dispatch of patrol teams       | Formulate ranking | Yes (Officer must       |
-|                                         | and rationale     | approve mobilization)   |
-+-----------------------------------------+-------------------+-------------------------+
-```
-
----
-
-## 8. Human-in-the-Loop Integration
-
-The SIGAP platform is designed to empower—never replace—human incident commanders. Agent outputs represent decision-support intelligence requiring human operational authorization.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Officer as Field Officer / Analyst (BPBD)
-    participant Workspace as AI Investigation Workspace
-    participant Agent as LLM Orchestrator
-    participant Tools as Specialized Tools
-    actor GroundTeam as Manggala Agni Patrol Team
-
-    Officer->>Workspace: Enters query ("Analisis Karhutla Pulang Pisau")
-    Workspace->>Agent: Dispatches goal & intent
-    Agent->>Tools: Orchestrates FIRMS, GEE, U-Net, Geospatial tools
-    Tools-->>Agent: Returns rasters, polygons, scores
-    Agent->>Workspace: Publishes interactive map, scores, and 'Why This Area?' report
+    Unconfirmed --> NeedsFieldCheck: Moderate Confidence (40-84%)
+    Unconfirmed --> Confirmed: High Confidence (>=85%) + Ground Report
     
-    Note over Workspace,Officer: Verification & Review Stage
-    Officer->>Workspace: Inspects before/after slider & peatland overlay
-    alt Officer confirms findings
-        Officer->>Workspace: Marks status: "TERKONFIRMASI"
-        Workspace->>GroundTeam: Dispatches verified patrol route & GPS coordinates
-    else Area obscured or questionable
-        Officer->>Workspace: Marks status: "PERLU PEMERIKSAAN LAPANGAN"
-        Workspace->>GroundTeam: Dispatches ground check / drone verification mission
-    else False alarm (e.g., factory flare)
-        Officer->>Workspace: Marks status: "TIDAK TERKONFIRMASI" (Adds note: "Thermal anomaly from factory")
-    end
-    Workspace->>Agent: Commits verified status to Immutable Audit Trail
+    NeedsFieldCheck --> DroneTasked: Verification Agent Deploys UAV
+    NeedsFieldCheck --> FieldCheckAssigned: Officer Assigns Ground Scout
+    
+    DroneTasked --> Confirmed: Drone Video Confirms Flame/Smoke
+    DroneTasked --> FalseAlarm: Drone Confirms Clear Canopy
+    
+    FieldCheckAssigned --> Confirmed: Scout Submits Verification Report
+    FieldCheckAssigned --> FalseAlarm: Scout Reports No Fire
+    
+    Confirmed --> DispatchApproved: Commander Authorizes Dispatch
+    Confirmed --> EscalationRequired: High Risk / Village Threat / Evacuation
+    
+    EscalationRequired --> SupervisorIntervention: Push Alert to Regional Commander
+    SupervisorIntervention --> DispatchApproved: Commander Approves Plan
+    SupervisorIntervention --> PlanModified: Commander Modifies Teams/Route
+    
+    DispatchApproved --> Executing: Coordination Agent Sends Mission Orders
+    Executing --> Resolved: Fire Contained & Mapped
+    FalseAlarm --> Closed: Logged to Audit Trail
+    Resolved --> [*]
+    Closed --> [*]
 ```
 
-### 8.1 Verification Status Lifecycle
-- **UNVERIFIED (Belum Diverifikasi):** Automated initial output from the agent; visible with an amber warning badge.
-- **CONFIRMED (Terkonfirmasi Terbakar):** Analyst has verified visual burn scars on satellite imagery and dNBR matches.
-- **REJECTED (Bukan Karhutla):** False alarm identified (agricultural burning permit, industrial flare, sensor noise).
-- **NEEDS FIELD CHECK (Perlu Pemeriksaan Lapangan):** Insufficient satellite clarity or high peat risk requires physical dispatch before confirmation.
+### 8.1 Mandatory Human Escalation Triggers
+The system immediately halts automated execution and alerts the human supervisor under the following conditions:
+1. **Civil Evacuation Recommendations:** Risk Scoring Agent calculates that smoke concentrations ($PM_{2.5} > 300\ \mu\text{g/m}^3$) or fire fronts will intersect populated residential areas within 3 hours.
+2. **Cross-Jurisdiction Resource Deployment:** Routing Agent recommends dispatching fire brigades across provincial or regency boundaries (e.g., deploying Central Kalimantan Daops into South Kalimantan).
+3. **Severe Resource Depletion:** All regional response brigades are deployed, leaving zero reserve teams for new high-priority ignitions.
+4. **Controlled Agricultural Burn Verification:** A landowner claims a detected hotspot is a permitted, canal-buffered traditional agricultural preparation fire (*kearifan lokal* under PPLH Law).
 
-### 8.2 Audit Trail & Legal Traceability
-Every investigation stores an immutable JSON trace containing:
-- Full transcript of prompt instructions and agent reasoning.
-- Exact scene IDs, acquisition timestamps, and GEE asset paths.
-- U-Net model version and inference hyperparameter values.
-- Analyst verification timestamp, reviewer identity, and field notes.
+### 8.2 Verification Workflow States
+Every incident tracked in SIGAP progresses through explicit lifecycle states:
+- **`unconfirmed`:** Thermal anomaly registered; sensor fusion and corroboration in progress.
+- **`needs_field_check`:** Moderate probability ($0.40 \le P < 0.85$); requires drone imagery or village scout confirmation.
+- **`confirmed`:** Multi-sensor corroboration or physical ground verification completed; eligible for tactical suppression.
+- **`false_alarm`:** Physical inspection or optical imagery confirmed industrial flare, cloud reflection, or clear canopy.
+
+### 8.3 Comprehensive Audit Trail & Provenance
+Every decision made by an agent is permanently serialized into a structured JSONL audit stream. Each log entry captures:
+- Unique incident UUID and agent execution session ID.
+- Exact model name (`gemini-3.5-flash`) and system prompt checksum.
+- Tool input arguments and raw tool response payloads.
+- Structured reasoning chain (*"Why this area was prioritized"* and *"Why drone verification was selected over direct dispatch"*).
+- Human supervisor sign-offs, overrides, and timestamps.
 
 ---
 
 ## 9. Metrics & Evaluation
 
-Evaluation of the SIGAP autonomous agent system is split between algorithmic model performance and operational agentic workflow efficiency.
+### 9.1 Target Performance Metrics
 
-### 9.1 Success Metrics (Spec Section 7)
+| Evaluation Metric | Baseline (Traditional Manual / Rule-Based) | Target (SIGAP Multi-Agent System) | Method of Measurement |
+|---|---|---|---|
+| **Detection-to-Dispatch Latency** | 120 – 240 minutes | **$\le 15$ minutes** | Duration from satellite ingestion to WhatsApp mission dispatch. |
+| **False-Alarm Crew Dispatches** | 32% of total dispatches | **$< 8\%$ of total dispatches** | Post-incident logs where crews found no fire activity. |
+| **Peatland Fire Damage Mitigation** | 68% expand underground | **$\ge 45\%$ contained in surface stage** | Hectares of deep peat burn scars mapped post-incident. |
+| **Fleet Routing Travel Efficiency** | Unoptimized haversine matching | **$\ge 28\%$ reduction in transit time** | Actual transit duration vs. naive closest-crew assignment. |
+| **Autonomous Recovery Success Rate** | 0% (stalls on error/clouds) | **$\ge 85\%$ without human reset** | Percentage of tool failures/cloud occlusions recovered autonomously. |
+| **Re-Planning Execution Time** | 45 – 90 minutes (manual re-briefing) | **$< 60$ seconds** | Duration to calculate and distribute new global dispatch plan upon disruption. |
 
-```
-+-----------------------------------------------------------------------------------+
-|                           PROTOTYPE EVALUATION METRICS                            |
-+-----------------------------------------------------------------------------------+
-| Metric Category        | Specific Indicator       | Target / Measurement Method   |
-+------------------------+--------------------------+-------------------------------+
-| Pipeline Performance   | End-to-End Execution     | < 3 - 5 minutes from prompt   |
-|                        | Time                     | to generated report           |
-| Machine Learning       | Segmentation IoU         | > 0.70 Intersection-over-Union|
-|                        | & Dice Score             | on held-out test split        |
-| Area Estimation        | Relative Area Error      | < 15% variance compared to    |
-|                        |                          | validated reference polygons  |
-| Agentic Robustness     | Autonomous Recovery Rate | > 80% of cloudy/error scenes  |
-|                        |                          | resolved without user assist  |
-| Tool Reliability       | Tool Execution Success   | > 95% successful JSON Schema  |
-|                        | Rate                     | roundtrip calls               |
-| Information Quality    | Evidence Completeness    | 100% compliance: includes     |
-|                        | Score                    | dates, sources & caveats      |
-+------------------------+--------------------------+-------------------------------+
-```
+### 9.2 Operational Boundaries & Explicit Non-Claims
 
-### 9.2 Boundaries and Prohibited Overclaims (Spec Section 7)
+To ensure responsible and safe operational adoption by Indonesian disaster agencies, the capabilities of SIGAP are bounded by the following explicit caveats:
 
-To maintain scientific integrity and prevent operational hazards, development and deployment teams must adhere to the following explicit boundaries:
-
-1. **Computation Speed $\neq$ Satellite Availability:** Delivering an analysis in 3 minutes does not alter orbital physics. If the satellite has not yet orbited over the target area post-event, real-time optical imagery does not exist.
-2. **Hotspots $\neq$ Forest Fires:** A thermal anomaly indicates elevated temperature (such as solar heating on tin roofs, clearing fires, or industrial operations). Hotspots must not be presented as definitive forest fire counts.
-3. **U-Net Masks $\neq$ Ground Truth:** Deep learning segmentation produces probabilistic pixel maps influenced by training distributions. They are analytical estimations that require validation.
-4. **Universal dNBR Thresholds:** Standard dNBR break values calibrated in North American temperate forests cannot be applied blindly to tropical peat swamp forests (*hutan rawa gambut*) without regional calibration.
-5. **Priority Rankings $\neq$ Military Dispatch Directives:** Multi-criteria priority scores reflect spatial vulnerability indicators; they serve as advisory recommendations for the incident commander.
-6. **MVP Prototype $\neq$ Fully Certified Operational Early Warning System:** A 3-day hackathon or sprint prototype demonstrates technological feasibility and workflow viability; it is not a field-certified national early warning infrastructure.
+1. **Hotspots Are Not Confirmed Fires:** Satellite thermal anomalies represent radiant heat signatures, not verified blazes. An uncorroborated hotspot detection is never treated as definitive legal or operational proof of an illegal fire.
+2. **Satellite Revisit Time Gaps:** Neither Landsat ($8\text{--}16\text{ days}$) nor Sentinel-2 ($5\text{ days}$) provides continuous real-time video surveillance. Fast-moving grass or crown fires can ignite, spread, and burn out between satellite passes.
+3. **U-Net Segmentation is an Estimation:** Deep learning segmentations of burn scars represent probabilistic pixel classifications based on optical reflectance. Actual burned area calculations must be verified by ground GPS perimeter tracking or drone orthomosaics for legal prosecution.
+4. **Cloud Occlusion Remains an Optical Barrier:** While the system autonomously seeks alternate dates and composites, dense equatorial cloud cover during monsoon transitions can temporarily blind optical sensors. In such conditions, radar (Sentinel-1) or field patrols must be prioritized.
+5. **AI Advises; Commanders Decide:** The SIGAP multi-agent system provides tactical recommendations and optimized resource allocation proposals. Final operational command, civil evacuation orders, and firefighter deployment authority remain exclusively with human Incident Commanders (Komandan Satgas Karhutla).
