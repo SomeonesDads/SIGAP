@@ -53,30 +53,90 @@ class FIRMSClient:
         "LANDSAT_NRT",
     }
 
-    # Standard bounding boxes [west, south, east, north] for Indonesian fire-prone regions
+    # Standard bounding boxes [west, south, east, north] for Indonesian provinces, cities & fire-prone regencies
     REGION_BBOXES: Dict[str, List[float]] = {
         "indonesia": [95.0, -11.0, 141.0, 6.0],
+        # Sumatera
+        "sumatera": [95.0, -6.0, 106.5, 6.0],
+        "aceh": [95.0, 2.0, 98.3, 6.0],
+        "banda aceh": [95.2, 5.4, 95.5, 5.7],
+        "sumatera utara": [97.0, 0.5, 100.5, 4.3],
+        "sumut": [97.0, 0.5, 100.5, 4.3],
+        "medan kota": [98.55, 3.45, 98.80, 3.75],
+        "kota medan": [98.55, 3.45, 98.80, 3.75],
+        "medan": [98.50, 3.40, 98.85, 3.80],
+        "deli serdang": [98.4, 3.1, 99.1, 3.8],
+        "binjai": [98.4, 3.5, 98.6, 3.7],
+        "sumatera barat": [98.5, -3.5, 101.9, 0.9],
+        "sumbar": [98.5, -3.5, 101.9, 0.9],
+        "padang": [100.2, -1.1, 100.6, -0.7],
+        "riau": [100.0, -1.1, 103.8, 2.5],
+        "pekanbaru": [101.3, 0.4, 101.6, 0.65],
+        "bengkalis": [100.8, 0.9, 102.5, 2.1],
+        "dumai": [101.2, 1.4, 101.8, 1.9],
+        "jambi": [101.1, -2.8, 104.5, -0.7],
+        "muaro jambi": [103.3, -2.1, 104.4, -1.1],
+        "sumatera selatan": [102.0, -4.9, 106.2, -1.6],
+        "sumsel": [102.0, -4.9, 106.2, -1.6],
+        "palembang": [104.6, -3.1, 104.9, -2.85],
+        "ogan komering ilir": [104.3, -4.2, 106.1, -2.5],
+        "oki": [104.3, -4.2, 106.1, -2.5],
+        "lampung": [103.5, -6.0, 106.0, -3.7],
+        # Kalimantan
         "kalimantan": [108.5, -4.5, 119.0, 4.5],
         "kalimantan tengah": [110.7, -3.5, 115.8, 0.8],
         "kalteng": [110.7, -3.5, 115.8, 0.8],
-        "kalimantan timur": [113.8, -2.5, 119.0, 2.6],
-        "kaltim": [113.8, -2.5, 119.0, 2.6],
-        "kalimantan barat": [108.5, -3.1, 114.2, 2.1],
-        "kalbar": [108.5, -3.1, 114.2, 2.1],
-        "kalimantan selatan": [114.3, -4.3, 116.6, -1.3],
-        "kalsel": [114.3, -4.3, 116.6, -1.3],
+        "palangkaraya": [113.7, -2.4, 114.1, -1.9],
+        "palangka raya": [113.7, -2.4, 114.1, -1.9],
+        "seruyan": [111.7, -3.5, 112.9, -1.5],
+        "kotawaringin": [111.1, -3.5, 113.2, -1.5],
         "pulang pisau": [113.5, -3.4, 114.6, -1.8],
         "sebangau": [113.3, -3.2, 114.2, -2.1],
         "kapuas": [113.8, -3.4, 114.9, -0.8],
         "barito utara": [114.4, -1.6, 115.8, 0.1],
+        "kalimantan timur": [113.8, -2.5, 119.0, 2.6],
+        "kaltim": [113.8, -2.5, 119.0, 2.6],
+        "samarinda": [117.0, -0.65, 117.3, -0.35],
+        "balikpapan": [116.75, -1.35, 117.05, -1.05],
+        "paser": [115.6, -2.3, 116.7, -0.8],
+        "kalimantan barat": [108.5, -3.1, 114.2, 2.1],
+        "kalbar": [108.5, -3.1, 114.2, 2.1],
+        "pontianak": [109.25, -0.1, 109.45, 0.1],
         "ketapang": [109.7, -3.1, 111.3, -0.5],
-        "riau": [100.0, -1.1, 103.8, 2.5],
-        "sumatera selatan": [102.0, -4.9, 106.2, -1.6],
-        "sumsel": [102.0, -4.9, 106.2, -1.6],
-        "ogan komering ilir": [104.3, -4.2, 106.1, -2.5],
-        "oki": [104.3, -4.2, 106.1, -2.5],
-        "jambi": [101.1, -2.8, 104.5, -0.7],
+        "kalimantan selatan": [114.3, -4.3, 116.6, -1.3],
+        "kalsel": [114.3, -4.3, 116.6, -1.3],
+        "banjarmasin": [114.5, -3.4, 114.7, -3.2],
+        # Jawa, Bali & Nusa Tenggara
+        "jawa": [105.0, -8.8, 114.6, -5.8],
+        "jakarta": [106.65, -6.4, 107.0, -6.05],
+        "jawa barat": [106.3, -7.8, 108.8, -5.9],
+        "bandung": [107.45, -7.1, 107.8, -6.8],
+        "jawa tengah": [108.5, -8.2, 111.7, -6.4],
+        "semarang": [110.25, -7.15, 110.55, -6.9],
+        "jawa timur": [111.0, -8.8, 114.6, -6.7],
+        "surabaya": [112.6, -7.4, 112.85, -7.15],
+        "pasuruan": [112.4, -7.95, 113.05, -7.5],
+        "malang": [112.35, -8.4, 112.95, -7.75],
+        "bali": [114.4, -8.9, 115.75, -8.05],
+        "nusa tenggara barat": [115.8, -9.1, 119.3, -8.0],
+        "ntb": [115.8, -9.1, 119.3, -8.0],
+        "nusa tenggara timur": [118.9, -11.0, 125.2, -8.0],
+        "ntt": [118.9, -11.0, 125.2, -8.0],
+        "timor tengah selatan": [124.0, -10.2, 124.8, -9.2],
+        "kupang": [123.4, -10.4, 124.0, -9.9],
+        # Sulawesi, Maluku & Papua
+        "sulawesi": [118.8, -5.8, 125.3, 1.8],
+        "sulawesi tengah": [119.5, -3.2, 123.5, 1.4],
+        "morowali": [121.0, -3.3, 122.5, -1.4],
+        "sulawesi selatan": [119.2, -5.8, 121.8, -1.9],
+        "makassar": [119.3, -5.25, 119.55, -5.0],
+        "maluku": [125.5, -8.5, 134.9, 2.5],
+        "papua": [130.0, -9.2, 141.0, -0.3],
+        "papua selatan": [137.5, -9.2, 141.0, -5.5],
+        "merauke": [138.5, -9.1, 141.0, -6.8],
     }
+
+    _GEOCODE_BBOX_CACHE: Dict[str, List[float]] = {}
 
     def __init__(
         self,
@@ -102,7 +162,7 @@ class FIRMSClient:
     def resolve_region(
         cls, region: Union[str, Dict[str, float], List[float]]
     ) -> Union[str, Dict[str, float], List[float]]:
-        """Resolve named Indonesian provinces/districts or comma-separated bbox strings."""
+        """Resolve named Indonesian provinces/districts/cities or comma-separated bbox strings."""
         if isinstance(region, str):
             cleaned = region.strip()
             if "," in cleaned:
@@ -115,9 +175,38 @@ class FIRMSClient:
             lower = cleaned.lower()
             if lower in cls.REGION_BBOXES:
                 return cls.REGION_BBOXES[lower]
-            for name, bbox in cls.REGION_BBOXES.items():
+            # Sort by longest key first so "medan kota" matches before "medan"
+            for name in sorted(cls.REGION_BBOXES.keys(), key=len, reverse=True):
                 if name in lower:
-                    return bbox
+                    return cls.REGION_BBOXES[name]
+            # Dynamic Nominatim forward geocoding fallback for any other Indonesian city/district
+            if lower in cls._GEOCODE_BBOX_CACHE:
+                return cls._GEOCODE_BBOX_CACHE[lower]
+            try:
+                with httpx.Client(timeout=3.5, headers={"User-Agent": "SIGAP-Wildfire-GeoAI/1.0"}) as client:
+                    resp = client.get(
+                        "https://nominatim.openstreetmap.org/search",
+                        params={"q": f"{cleaned}, Indonesia", "format": "json", "limit": 1},
+                    )
+                    if resp.status_code == 200 and resp.json():
+                        item = resp.json()[0]
+                        bb = item.get("boundingbox")
+                        if bb and len(bb) == 4:
+                            # Nominatim boundingbox is [south_lat, north_lat, west_lon, east_lon]
+                            south, north, west, east = float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3])
+                            # Ensure at least a 0.35° (~38 km) search window around small urban districts
+                            pad_lat = max(0.0, (0.35 - (north - south)) / 2.0)
+                            pad_lon = max(0.0, (0.35 - (east - west)) / 2.0)
+                            resolved_bbox = [
+                                round(west - pad_lon, 4),
+                                round(south - pad_lat, 4),
+                                round(east + pad_lon, 4),
+                                round(north + pad_lat, 4),
+                            ]
+                            cls._GEOCODE_BBOX_CACHE[lower] = resolved_bbox
+                            return resolved_bbox
+            except Exception as exc:
+                logger.debug("Nominatim forward geocode fallback for '%s': %s", cleaned, exc)
         return region
 
     async def get_hotspots(

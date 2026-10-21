@@ -225,11 +225,10 @@ async def get_spatial_context(
 
     overpass_query = f"""
     [out:json][timeout:8];
-    (
-      node["place"~"village|town|hamlet|suburb"](around:{radius_m},{lat},{lon});
-      way["natural"~"wetland|wood"](around:{min(radius_m, 12000)},{lat},{lon});
-    );
-    out body geom 25;
+    node["place"~"village|town|hamlet|suburb"](around:{radius_m},{lat},{lon});
+    out body 15;
+    way["natural"~"wetland|wood"](around:{min(radius_m, 12000)},{lat},{lon});
+    out body geom 15;
     """
     try:
         async with httpx.AsyncClient(timeout=9.0) as client:

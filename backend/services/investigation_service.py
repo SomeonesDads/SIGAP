@@ -63,12 +63,18 @@ class InvestigationService:
         """
         investigation_id = f"inv-{uuid.uuid4().hex[:8]}"
         now = datetime.now(timezone.utc)
+        try:
+            from backend.api.routes.hotspot import extract_region_from_query
+        except ImportError:
+            from api.routes.hotspot import extract_region_from_query
+
+        detected_region = request.region or extract_region_from_query(request.get_query())
 
         response = InvestigationResponse(
             id=investigation_id,
             status=InvestigationStatus.PENDING.value,
             query=request.get_query(),
-            region=request.region or "Indonesia (Auto-detected)",
+            region=detected_region,
             created_at=now,
             updated_at=now,
             results=None,
@@ -95,15 +101,14 @@ class InvestigationService:
             }
             return
 
-        target_region = record.region or "Kalimantan Tengah"
+        try:
+            from backend.api.routes.hotspot import extract_region_from_query
+        except ImportError:
+            from api.routes.hotspot import extract_region_from_query
+
+        target_region = record.region or extract_region_from_query(record.query)
         if "Auto-detected" in target_region:
-            q_lower = record.query.lower()
-            for r_name in ("Pulang Pisau", "Ketapang", "Ogan Komering Ilir", "Sebangau", "Kapuas", "Riau", "Barito Utara", "Kalimantan Timur", "Kalimantan Barat", "Kalimantan Selatan", "Sumatera Selatan"):
-                if r_name.lower() in q_lower:
-                    target_region = r_name
-                    break
-            else:
-                target_region = "Kalimantan Tengah"
+            target_region = extract_region_from_query(record.query)
 
         yield {
             "investigation_id": investigation_id,

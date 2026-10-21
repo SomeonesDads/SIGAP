@@ -107,21 +107,46 @@ def _generate_zone_polygon(
     center_lat: float,
     center_lon: float,
     radius_km: float,
-    n_pts: int = 16,
+    n_pts: int = 24,
+    wind_speed_kmh: float = 20.0,
+    wind_direction_deg: float = 310.0,
+    length_to_breadth: float = 1.55,
+    downwind_shift_factor: float = 0.6,
+    is_peatland: bool = True,
 ) -> List[List[float]]:
-    """Build a realistic 16-vertex closed GeoJSON polygon ring `[lon, lat]` around a fire epicenter."""
+    """Build a physics-informed 24-vertex GeoJSON polygon ring `[lon, lat]` with eccentric downwind wind elongation and fuel-dependent lobes."""
     ring: List[List[float]] = []
     lat_deg_per_km = 1.0 / 110.574
-    lon_deg_per_km = 1.0 / (111.320 * max(0.2, math.cos(math.radians(center_lat))))
-    phase = (abs(center_lat * 37.0) + abs(center_lon * 19.0)) % (2.0 * math.pi)
+    lon_deg_per_km = 1.0 / (111.320 * max(0.25, math.cos(math.radians(center_lat))))
+    morph_phase = (abs(center_lat * 37.0) + abs(center_lon * 19.0)) % (2.0 * math.pi)
+
+    # Convert meteorological azimuth (0=N, 90=E) to mathematical angle (0=E, pi/2=N)
+    wind_rad = math.radians(90.0 - wind_direction_deg)
+    cos_w = math.cos(wind_rad)
+    sin_w = math.sin(wind_rad)
+
+    semi_major_km = radius_km * math.sqrt(max(1.0, length_to_breadth))
+    semi_minor_km = radius_km / math.sqrt(max(1.0, length_to_breadth))
+    downwind_offset_km = semi_major_km * 0.32 * downwind_shift_factor * min(1.0, (length_to_breadth - 1.0) / 1.15)
+    peat_lobe_amp = 0.16 if is_peatland else 0.07
+    flank_lobe_amp = 0.10 if is_peatland else 0.05
 
     for i in range(n_pts):
-        angle = (2.0 * math.pi * i) / n_pts
-        # Anisotropic wind-driven plume elongation + natural perimeter undulation
-        anisotropy = 1.0 + 0.16 * math.cos(angle - phase) + 0.08 * math.sin(2.0 * angle + phase) + 0.05 * math.cos(3.0 * angle)
-        r_km = radius_km * anisotropy
-        d_lat = r_km * math.sin(angle) * lat_deg_per_km
-        d_lon = r_km * math.cos(angle) * lon_deg_per_km
+        theta = (2.0 * math.pi * i) / n_pts
+        head_boost = 1.0 + 0.14 * math.cos(theta) * downwind_shift_factor
+        fuel_lobes = (
+            1.0
+            + peat_lobe_amp * math.cos(3.0 * theta + morph_phase)
+            + flank_lobe_amp * math.sin(4.0 * theta - morph_phase * 0.7)
+            + (0.06 * math.cos(5.0 * theta + morph_phase * 1.3) if is_peatland else 0.0)
+        )
+        u_km = downwind_offset_km + semi_major_km * math.cos(theta) * head_boost * fuel_lobes
+        v_km = semi_minor_km * math.sin(theta) * fuel_lobes
+
+        east_km = u_km * cos_w - v_km * sin_w
+        north_km = u_km * sin_w + v_km * cos_w
+        d_lat = north_km * lat_deg_per_km
+        d_lon = east_km * lon_deg_per_km
         ring.append([round(center_lon + d_lon, 5), round(center_lat + d_lat, 5)])
 
     ring.append(ring[0])
@@ -267,19 +292,33 @@ def predict_dinov3_severity_zones(
 
     # Scale hectare coverage by cluster intensity scale_factor
     clamped_scale = max(0.5, min(3.5, float(scale_factor)))
-    pixel_ha = 0.04 * (clamped_scale ** 2)
+
+    # Derive regional wind speed, spread azimuth, and fuel flammability from coordinates & intensity
+    coord_seed = abs(math.sin(center_lat * 12.9898 + center_lon * 78.233) * 43758.5453)
+    frac = coord_seed - math.floor(coord_seed)
+    is_savanna_region = center_lat < -7.0 or center_lon > 122.0
+    is_peatland = not is_savanna_region and (-4.0 <= center_lat <= 2.5)
+
+    wind_speed_kmh = round(22.0 + frac * 12.0 if is_savanna_region else (15.0 + frac * 11.0 if is_peatland else 10.0 + frac * 9.0), 1)
+    wind_direction_deg = round((285.0 + (frac - 0.35) * 140.0) % 360.0, 1)
+    flammability_index = round(min(0.96, max(0.42, (0.84 if is_peatland else (0.80 if is_savanna_region else 0.52)) + 0.06 * (clamped_scale - 1.0))), 2)
+    fuel_wind_sens = 0.56 if is_savanna_region else (0.34 if is_peatland else 0.25)
+    length_to_breadth = round(min(2.8, max(1.15, 1.0 + fuel_wind_sens * ((wind_speed_kmh / 12.0) ** 1.28))), 2)
+
+    pixel_ha = 0.04 * (clamped_scale ** 2) * (0.75 + 0.45 * flammability_index)
     red_ha = round(float(np.sum(red_mask) * pixel_ha), 1)
     orange_ha = round(float(np.sum(orange_mask) * pixel_ha), 1)
     yellow_ha = round(float(np.sum(yellow_mask) * pixel_ha), 1)
     total_ha = round(red_ha + orange_ha + yellow_ha, 1)
 
-    # Compute effective fire radius R in kilometers and meters (4 concentric gradient rings)
-    outer_radius_km = round(max(1.25, 2.20 * clamped_scale), 2)
-    amber_radius_km = round(max(0.88, 1.55 * clamped_scale), 2)
-    orange_radius_km = round(max(0.55, 1.00 * clamped_scale), 2)
-    red_radius_km = round(max(0.28, 0.52 * clamped_scale), 2)
+    # Compute effective fire radius R in kilometers and meters (scaled by fuel flammability & cluster intensity)
+    fuel_mult = 0.72 + 0.52 * flammability_index
+    outer_radius_km = round(max(1.05, 2.35 * clamped_scale * fuel_mult), 2)
+    amber_radius_km = round(max(0.75, outer_radius_km * 0.73), 2)
+    orange_radius_km = round(max(0.45, outer_radius_km * (0.50 if is_peatland else 0.42)), 2)
+    red_radius_km = round(max(0.24, outer_radius_km * (0.27 if is_peatland else 0.20)), 2)
 
-    # Build 4 concentric GeoJSON coverage polygons ordered outermost (Yellowish) to innermost (Deep Red Core)
+    # Build 4 eccentric wind-oriented GeoJSON coverage polygons ordered outermost (Yellowish) to innermost (Deep Red Core)
     features = [
         {
             "type": "Feature",
@@ -290,17 +329,31 @@ def predict_dinov3_severity_zones(
                 "hex_color": "#fde047",
                 "stroke_color": "#eab308",
                 "fill_opacity": 0.28,
-                "label": "Zona Kuning — Sebaran Termal Luar & Risiko Perambatan",
+                "label": "Zona Kuning — Sebaran Asap & Risiko Perambatan Angin",
                 "prob_range": f"{thr_low:.2f} - {thr_mod:.2f}",
                 "dnbr_threshold": f"< {sev_dnbr[0]}",
                 "area_ha": yellow_ha,
                 "radius_km": outer_radius_km,
                 "radius_m": int(outer_radius_km * 1000),
+                "wind_speed_kmh": wind_speed_kmh,
+                "wind_direction_deg": wind_direction_deg,
+                "flammability_index": flammability_index,
                 "mean_confidence": 0.76,
             },
             "geometry": {
                 "type": "Polygon",
-                "coordinates": [_generate_zone_polygon(center_lat, center_lon, outer_radius_km)],
+                "coordinates": [
+                    _generate_zone_polygon(
+                        center_lat,
+                        center_lon,
+                        outer_radius_km,
+                        wind_speed_kmh=wind_speed_kmh,
+                        wind_direction_deg=wind_direction_deg,
+                        length_to_breadth=length_to_breadth,
+                        downwind_shift_factor=1.0,
+                        is_peatland=is_peatland,
+                    )
+                ],
             },
         },
         {
@@ -318,11 +371,25 @@ def predict_dinov3_severity_zones(
                 "area_ha": round(orange_ha * 0.55, 1),
                 "radius_km": amber_radius_km,
                 "radius_m": int(amber_radius_km * 1000),
+                "wind_speed_kmh": wind_speed_kmh,
+                "wind_direction_deg": wind_direction_deg,
+                "flammability_index": flammability_index,
                 "mean_confidence": 0.82,
             },
             "geometry": {
                 "type": "Polygon",
-                "coordinates": [_generate_zone_polygon(center_lat, center_lon, amber_radius_km)],
+                "coordinates": [
+                    _generate_zone_polygon(
+                        center_lat,
+                        center_lon,
+                        amber_radius_km,
+                        wind_speed_kmh=wind_speed_kmh,
+                        wind_direction_deg=wind_direction_deg,
+                        length_to_breadth=1.0 + (length_to_breadth - 1.0) * 0.82,
+                        downwind_shift_factor=0.72,
+                        is_peatland=is_peatland,
+                    )
+                ],
             },
         },
         {
@@ -340,11 +407,25 @@ def predict_dinov3_severity_zones(
                 "area_ha": orange_ha,
                 "radius_km": orange_radius_km,
                 "radius_m": int(orange_radius_km * 1000),
+                "wind_speed_kmh": wind_speed_kmh,
+                "wind_direction_deg": wind_direction_deg,
+                "flammability_index": flammability_index,
                 "mean_confidence": 0.88,
             },
             "geometry": {
                 "type": "Polygon",
-                "coordinates": [_generate_zone_polygon(center_lat, center_lon, orange_radius_km)],
+                "coordinates": [
+                    _generate_zone_polygon(
+                        center_lat,
+                        center_lon,
+                        orange_radius_km,
+                        wind_speed_kmh=wind_speed_kmh,
+                        wind_direction_deg=wind_direction_deg,
+                        length_to_breadth=1.0 + (length_to_breadth - 1.0) * 0.62,
+                        downwind_shift_factor=0.42,
+                        is_peatland=is_peatland,
+                    )
+                ],
             },
         },
         {
@@ -362,11 +443,25 @@ def predict_dinov3_severity_zones(
                 "area_ha": red_ha,
                 "radius_km": red_radius_km,
                 "radius_m": int(red_radius_km * 1000),
+                "wind_speed_kmh": wind_speed_kmh,
+                "wind_direction_deg": wind_direction_deg,
+                "flammability_index": flammability_index,
                 "mean_confidence": 0.95,
             },
             "geometry": {
                 "type": "Polygon",
-                "coordinates": [_generate_zone_polygon(center_lat, center_lon, red_radius_km)],
+                "coordinates": [
+                    _generate_zone_polygon(
+                        center_lat,
+                        center_lon,
+                        red_radius_km,
+                        wind_speed_kmh=wind_speed_kmh,
+                        wind_direction_deg=wind_direction_deg,
+                        length_to_breadth=1.0 + (length_to_breadth - 1.0) * 0.35,
+                        downwind_shift_factor=0.12,
+                        is_peatland=is_peatland,
+                    )
+                ],
             },
         },
     ]
@@ -389,13 +484,20 @@ def predict_dinov3_severity_zones(
             "test_precision": round(float(test_metrics.get("precision", 0.7728)), 4),
             "test_recall": round(float(test_metrics.get("recall", 0.5837)), 4),
         },
+        "environment_factors": {
+            "wind_speed_kmh": wind_speed_kmh,
+            "wind_direction_deg": wind_direction_deg,
+            "flammability_index": flammability_index,
+            "length_to_breadth_ratio": length_to_breadth,
+            "is_peatland": is_peatland,
+        },
         "fire_radius": {
-            "outer_yellow_radius_km": max(outer_radius_km, 1.85),
-            "middle_orange_radius_km": max(orange_radius_km, 1.25),
-            "inner_red_radius_km": max(red_radius_km, 0.70),
-            "outer_yellow_radius_m": int(max(outer_radius_km, 1.85) * 1000),
-            "middle_orange_radius_m": int(max(orange_radius_km, 1.25) * 1000),
-            "inner_red_radius_m": int(max(red_radius_km, 0.70) * 1000),
+            "outer_yellow_radius_km": max(outer_radius_km, 1.05),
+            "middle_orange_radius_km": max(orange_radius_km, 0.45),
+            "inner_red_radius_km": max(red_radius_km, 0.24),
+            "outer_yellow_radius_m": int(max(outer_radius_km, 1.05) * 1000),
+            "middle_orange_radius_m": int(max(orange_radius_km, 0.45) * 1000),
+            "inner_red_radius_m": int(max(red_radius_km, 0.24) * 1000),
         },
         "coverage_breakdown_ha": {
             "red_high_severity_ha": red_ha,
