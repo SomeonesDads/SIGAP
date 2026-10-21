@@ -65,21 +65,23 @@ function InvestigationContent() {
           {
             id: "step-sample-3",
             title: "Seleksi & Akuisisi Citra Landsat 8/9 GEE",
-            description: "Menghitung tutupan awan < 15% pada scene path/row 118/062.",
-            status: "running" as const,
+            description: "Komposit 3-hari diaktifkan untuk mengatasi tutupan awan (tutupan bersih < 15%).",
+            status: "completed" as const,
             timestamp: "10:02:25",
           },
           {
             id: "step-sample-4",
             title: "Segmentasi U-Net & Deteksi Burn Scar",
-            description: "Inferensi citra multikanal untuk memisahkan piksel terbakar.",
-            status: "pending" as const,
+            description: "1,240 Ha area terbakar terdeteksi dengan kelas keparahan dNBR Tinggi.",
+            status: "completed" as const,
+            timestamp: "10:02:31",
           },
           {
             id: "step-sample-5",
             title: "Matriks Penilaian Dampak & Aksesibilitas",
-            description: "Overlay tutupan lahan gambut dan jarak ke permukiman terdekat.",
-            status: "pending" as const,
+            description: "Skor risiko 94/100 (Lahan gambut dalam >3m, 800m ke permukiman Desa Garung).",
+            status: "completed" as const,
+            timestamp: "10:02:38",
           },
         ];
 

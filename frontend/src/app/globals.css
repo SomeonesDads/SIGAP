@@ -57,6 +57,6 @@ body {
 }
 
 /* Push the Esri physical basemap toward the saturated relief look of the Figma map */
-.leaflet-tile-pane {
+.sigap-monitor-map .leaflet-tile-pane {
   filter: saturate(1.2);
 }

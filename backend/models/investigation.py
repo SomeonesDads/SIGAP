@@ -19,10 +19,15 @@ class InvestigationStatus(str, Enum):
 class InvestigationCreate(BaseModel):
     """Payload to trigger an autonomous wildfire investigation."""
 
-    query: str = Field(..., description="Natural language prompt or query for the investigation")
+    query: str | None = Field(default=None, description="Natural language prompt or query for the investigation")
+    prompt: str | None = Field(default=None, description="Alias for query sent by client interfaces")
     region: str | None = Field(default=None, description="Target region or administrative boundary")
     date_start: str | None = Field(default=None, description="Start date for analysis window (YYYY-MM-DD)")
     date_end: str | None = Field(default=None, description="End date for analysis window (YYYY-MM-DD)")
+
+    def get_query(self) -> str:
+        """Return either query or prompt string."""
+        return self.query or self.prompt or "Analisis karhutla"
 
 
 class InvestigationResponse(BaseModel):

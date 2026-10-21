@@ -41,8 +41,8 @@ export function FireMapView() {
     },
     {
       id: "segmentation",
-      name: "Segmentasi U-Net",
-      description: "Prediksi batas area terbakar (Burn Scar)",
+      name: "Segmentasi DINOv3 BurnSeg",
+      description: "Prediksi radius & zona cakupan Merah/Oranye/Kuning",
       icon: <Scan className="h-4 w-4 text-rose-700" />,
       active: true,
       color: "border-rose-500/50 text-rose-700",
@@ -50,10 +50,10 @@ export function FireMapView() {
     {
       id: "dnbr",
       name: "dNBR (Burn Severity)",
-      description: "Tingkat keparahan kerusakan vegetasi satelit",
-      icon: <Sliders className="h-4 w-4 text-purple-700" />,
+      description: "Tingkat keparahan kerusakan vegetasi (Thresholds: 0.27 / 0.44)",
+      icon: <Sliders className="h-4 w-4 text-orange-700" />,
       active: true,
-      color: "border-purple-500/50 text-purple-700",
+      color: "border-orange-500/50 text-orange-700",
     },
     {
       id: "peatland",
@@ -75,6 +75,18 @@ export function FireMapView() {
 
   const [sliderPosition, setSliderPosition] = useState(50);
   const [selectedRegion, setSelectedRegion] = useState("Pulang Pisau, Kalteng");
+
+  const REGION_COORDINATES: Record<string, { center: [number, number]; zoom: number }> = {
+    "Pulang Pisau, Kalteng": { center: [-2.9812, 114.1205], zoom: 11 },
+    "Ketapang, Kalbar": { center: [-1.8488, 109.9723], zoom: 11 },
+    "OKI, Sumsel": { center: [-3.4116, 105.1092], zoom: 10 },
+    "TN Sebangau, Kalteng": { center: [-2.5638, 113.8856], zoom: 10 },
+  };
+
+  const currentRegionConfig = REGION_COORDINATES[selectedRegion] || {
+    center: [-2.9812, 114.1205],
+    zoom: 10,
+  };
 
   const toggleLayer = (id: string) => {
     setLayers((prev) =>
@@ -183,36 +195,56 @@ export function FireMapView() {
               ))}
             </div>
 
-            {/* dNBR Severity Legend */}
-            <div className="rounded-xl border border-slate-200 bg-slate-100 p-3 text-xs space-y-2">
-              <span className="font-semibold text-slate-700 text-[11px] uppercase tracking-wide block">
-                Legenda Keparahan Kebakaran (dNBR)
-              </span>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-slate-600">Tidak Terbakar (&lt; 0.1)</span>
+            {/* DINOv3 Red/Orange/Yellow Radius & Severity Legend */}
+            <div className="rounded-xl border border-slate-200 bg-slate-100 p-3 text-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700 text-[11px] uppercase tracking-wide">
+                  Cakupan Radius DINOv3 & Keparahan
+                </span>
+                <span className="text-[10px] text-amber-700 font-mono">
+                  vit_large_patch16
+                </span>
+              </div>
+              <div className="space-y-1.5 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                    <span className="text-slate-800 font-medium">Merah (Inti Tinggi)</span>
+                  </div>
+                  <span className="text-slate-600 font-mono text-[10px]">R: 0.70 km | Prob &ge; 0.80</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                  <span className="text-slate-600">Keparahan Rendah</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                    <span className="text-slate-800 font-medium">Oranye (Rambat Sedang)</span>
+                  </div>
+                  <span className="text-slate-600 font-mono text-[10px]">R: 1.25 km | Prob 0.60–0.80</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-orange-500" />
-                  <span className="text-slate-600">Keparahan Sedang</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+                    <span className="text-slate-800 font-medium">Kuning (Sebaran Luar)</span>
+                  </div>
+                  <span className="text-slate-600 font-mono text-[10px]">R: 1.85 km | Prob 0.40–0.60</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-rose-600" />
-                  <span className="text-slate-600">Keparahan Tinggi (&gt; 0.66)</span>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/80">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-slate-600">Tidak Terbakar</span>
+                  </div>
+                  <span className="text-slate-500 font-mono text-[10px]">Prob &lt; 0.40 | dNBR &lt; 0.27</span>
                 </div>
               </div>
             </div>
           </Card>
         </div>
 
+
         {/* Full-width Map Container & Before/After Comparison Slider (8 cols on lg) */}
         <div className="lg:col-span-8 space-y-4">
           <MapContainer
+            center={currentRegionConfig.center}
+            zoom={currentRegionConfig.zoom}
             height="h-[460px]"
             title={`Analisis Spasial: ${selectedRegion}`}
             activeLayers={activeLayerNames}

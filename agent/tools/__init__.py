@@ -42,4 +42,48 @@ def agent_tool(
     return decorator
 
 
-__all__ = ["agent_tool"]
+__all__ = [
+    "agent_tool",
+    "fetch_hotspots",
+    "fetch_satellite_imagery",
+    "assess_image_quality",
+    "segment_burned_area",
+    "compute_dnbr",
+    "compute_burned_area",
+    "overlay_risk_layers",
+    "score_hotspot_priority",
+    "rank_all_active_hotspots",
+    "explain_priority",
+    "optimize_team_assignments",
+    "estimate_travel_time",
+    "find_nearest_water_sources",
+]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "fetch_hotspots":
+        from agent.tools.firms_tool import fetch_hotspots
+
+        return fetch_hotspots
+    if name in ("fetch_satellite_imagery", "assess_image_quality"):
+        from agent.tools import earth_engine_tool
+
+        return getattr(earth_engine_tool, name)
+    if name == "segment_burned_area":
+        from agent.tools.unet_tool import segment_burned_area
+
+        return segment_burned_area
+    if name in ("compute_dnbr", "compute_burned_area", "overlay_risk_layers"):
+        from agent.tools import geospatial_tool
+
+        return getattr(geospatial_tool, name)
+    if name in ("score_hotspot_priority", "rank_all_active_hotspots", "explain_priority"):
+        from agent.tools import priority_tool
+
+        return getattr(priority_tool, name)
+    if name in ("optimize_team_assignments", "estimate_travel_time", "find_nearest_water_sources"):
+        from agent.tools import dispatch_tool
+
+        return getattr(dispatch_tool, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

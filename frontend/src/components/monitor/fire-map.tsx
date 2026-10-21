@@ -110,7 +110,7 @@ export default function FireMap({
       zoomControl={false}
       attributionControl
       worldCopyJump
-      className="size-full"
+      className="sigap-monitor-map size-full"
     >
       {/* Shaded-relief physical basemap matches the Figma map style; topo detail when zoomed in */}
       <TileLayer

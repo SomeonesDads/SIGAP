@@ -46,16 +46,6 @@ def fetch_satellite_imagery(
         max_cloud_cover,
     )
 
-    # Attempt to use real EarthEngineClient if configured
-    try:
-        from data.earth_engine.client import EarthEngineClient
-
-        ee_project = os.getenv("GEE_PROJECT_ID")
-        client = EarthEngineClient(project_id=ee_project)
-        # Note: If ee is authenticated, client.initialize() can be called
-    except Exception as exc:
-        logger.debug("EarthEngineClient initialization bypassed: %s", exc)
-
     # Parse AOI bounds if valid JSON
     aoi_bounds = [113.9, -3.2, 114.3, -2.8]
     try:
@@ -71,7 +61,7 @@ def fetch_satellite_imagery(
     except Exception:
         pass
 
-    # Stub implementation providing realistic Sentinel-2 MSI L2A composite metadata
+    # Local / stub Sentinel-2 MSI L2A composite metadata (no live GEE auth required)
     return {
         "status": "success",
         "collection": "COPERNICUS/S2_SR_HARMONIZED",
@@ -94,6 +84,8 @@ def fetch_satellite_imagery(
         "export_ready": True,
         "note": "Satellite pair successfully identified. Pre-fire baseline established.",
     }
+
+
 
 
 @agent_tool
