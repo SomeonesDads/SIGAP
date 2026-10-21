@@ -12,14 +12,15 @@ interface DroneStatusProps {
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <p className="whitespace-nowrap font-mono text-[20px] leading-none tracking-[-0.4px] text-black">
-      <span className="font-bold">{label}:</span> <span className="font-medium">{value}</span>
-    </p>
+    <div className="flex items-center justify-between gap-2 font-mono text-[11px] leading-tight text-slate-800">
+      <span className="text-slate-500">{label}:</span>
+      <span className="truncate font-semibold text-slate-900">{value}</span>
+    </div>
   );
 }
 
 const pill =
-  "h-10 cursor-pointer rounded-[10px] px-[15px] font-mono text-[24px] font-medium leading-none tracking-[-0.48px] text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sigap-cobalt focus-visible:ring-offset-2";
+  "h-6 cursor-pointer rounded-md px-2 font-mono text-[11px] font-semibold leading-none text-white transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sigap-cobalt";
 
 /** "Status Drone:" block, only shown in simulation mode. */
 export function DroneStatus({
@@ -36,52 +37,74 @@ export function DroneStatus({
   const canAssign = selectedHotspot !== null && selectedHotspot.id !== drone.targetId;
 
   return (
-    <section>
-      <h2 className="font-mono text-[24px] font-medium leading-none tracking-[-0.48px] text-black">
-        Status Drone:
-      </h2>
-
-      <div className="mt-4 flex flex-wrap gap-3" role="tablist" aria-label="Pilih drone">
-        {drones.map((d) => {
-          const active = d.id === drone.id;
-          return (
-            <button
-              key={d.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => onSelectDrone(d.id)}
-              className={cn(
-                pill,
-                "min-w-32",
-                active ? "bg-sigap-cobalt hover:bg-[#0f63bd]" : "bg-sigap-cobalt/40 hover:bg-sigap-cobalt/60"
-              )}
-            >
-              {d.name}
-            </button>
-          );
-        })}
+    <section className="space-y-2 border-t border-slate-200 pt-2.5">
+      <div className="flex items-center justify-between gap-1">
+        <h2 className="font-mono text-[10px] font-bold uppercase tracking-wider text-slate-700 shrink-0">
+          5 Drone Aktif
+        </h2>
+        <div className="flex items-center gap-1" role="tablist" aria-label="Pilih drone">
+          {drones.map((d) => {
+            const active = d.id === drone.id;
+            const shortLabel = d.name.replace(/^Drone\s+/i, "");
+            return (
+              <button
+                key={d.id}
+                type="button"
+                role="tab"
+                title={`${d.name} (${d.mode})`}
+                aria-selected={active}
+                onClick={() => onSelectDrone(d.id)}
+                className={cn(
+                  "h-5 min-w-[22px] cursor-pointer rounded px-1.5 font-mono text-[10px] font-bold leading-none text-white transition-colors",
+                  active
+                    ? "bg-sigap-cobalt ring-1 ring-sigap-cobalt/40 hover:bg-[#0f63bd]"
+                    : d.mode === "Memadamkan"
+                    ? "bg-emerald-600 hover:bg-emerald-500"
+                    : "bg-slate-400 hover:bg-slate-500"
+                )}
+              >
+                {shortLabel}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-4">
-        {drone.baseName && <Field label="Base" value={drone.baseName} />}
-        <Field label="GPS coord" value={`${drone.lat.toFixed(4)}, ${drone.lon.toFixed(4)}`} />
-        <Field label="Mode" value={drone.targetId && drone.mode !== "Siaga" ? `${drone.mode} (${drone.targetId})` : drone.mode} />
-        <Field label="Battery" value={`${Math.round(drone.battery)}%`} />
-        <Field label="Extinguisher" value={`${Math.round(drone.extinguisherL)}/${drone.extinguisherCapacityL} L`} />
+      <div className="space-y-1 rounded-lg border border-slate-200 bg-white/90 p-2">
+        <Field
+          label="Unit"
+          value={`${drone.name} · Padam: ${drone.extinguishedCount ?? 0} klaster`}
+        />
+        {drone.baseName && <Field label="Asal" value={drone.baseName} />}
+        <Field label="GPS" value={`${drone.lat.toFixed(3)}, ${drone.lon.toFixed(3)}`} />
+        <Field
+          label="Mode"
+          value={
+            drone.targetId && drone.mode !== "Siaga"
+              ? `${drone.mode} (${drone.targetId})`
+              : drone.mode
+          }
+        />
+        <div className="grid grid-cols-2 gap-2 pt-0.5">
+          <Field label="Baterai" value={`${Math.round(drone.battery)}%`} />
+          <Field
+            label="Payload"
+            value={`${Math.round(drone.extinguisherL)}/${drone.extinguisherCapacityL}L`}
+          />
+        </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           disabled={!canAssign}
           onClick={() => selectedHotspot && onAssign(drone.id, selectedHotspot.id)}
           className={cn(
             pill,
-            "bg-sigap-cobalt text-[18px] hover:bg-[#0f63bd] disabled:cursor-not-allowed disabled:bg-sigap-cobalt/40"
+            "flex-1 bg-sigap-cobalt hover:bg-[#0f63bd] disabled:cursor-not-allowed disabled:bg-slate-300"
           )}
         >
-          {selectedHotspot ? `Tugaskan ke ${selectedHotspot.id}` : "Pilih hotspot di peta"}
+          {selectedHotspot ? `Tugaskan → ${selectedHotspot.id}` : "Pilih hotspot"}
         </button>
         <button
           type="button"
@@ -89,10 +112,10 @@ export function DroneStatus({
           onClick={() => onRecall(drone.id)}
           className={cn(
             pill,
-            "border-2 border-sigap-cobalt bg-transparent text-[18px] text-sigap-cobalt hover:bg-sigap-cobalt/10 disabled:cursor-not-allowed disabled:opacity-40"
+            "border border-sigap-cobalt bg-white text-sigap-cobalt hover:bg-sigap-cobalt/10 disabled:cursor-not-allowed disabled:opacity-40"
           )}
         >
-          Kembali ke base
+          Recall
         </button>
       </div>
     </section>

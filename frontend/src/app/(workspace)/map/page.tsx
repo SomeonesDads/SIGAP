@@ -1,11 +1,11 @@
 import React from "react";
-import { FireMapView } from "@/components/map/fire-map-view";
+import { MonitorDashboard } from "@/components/monitor/monitor-dashboard";
 
 export const metadata = {
-  title: "Fire Analysis Map — SIGAP",
-  description: "Visualisasi peta interaktif karhutla, lapisan hotspot, segmentasi U-Net, dNBR, dan komparasi sebelum-sesudah.",
+  title: "SIGAP — Unified Wildfire Command Center",
+  description: "Visualisasi peta interaktif karhutla, chat investigasi AI, lapisan DINOv3, dNBR, dan komparasi satelit dalam satu layar.",
 };
 
 export default function FireMapPage() {
-  return <FireMapView />;
+  return <MonitorDashboard initialDrawer="imagery" />;
 }

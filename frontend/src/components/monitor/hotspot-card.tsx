@@ -1,86 +1,89 @@
-import { SEVERITY_META, type Hotspot } from "@/lib/monitoring";
+import { Bot, X } from "lucide-react";
+import { getHotspotEnvironment, SEVERITY_META, type Hotspot } from "@/lib/monitoring";
 
-/** Pointer tip position inside popup-bg.svg (265.385 × 280). */
-export const HOTSPOT_CARD_TIP = { x: 86.935, y: 280 } as const;
+/** Pointer tip position for anchoring above the selected marker (width 244, height 246). */
+export const HOTSPOT_CARD_TIP = { x: 122, y: 246 } as const;
 
 interface HotspotCardProps {
   hotspot: Hotspot;
   priorityRank: number;
+  onInvestigate?: (hotspot: Hotspot) => void;
+  onClose?: () => void;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <>
-      <dt className="font-bold">{label}</dt>
-      <dd className="font-normal">{value}</dd>
-    </>
+    <div className="flex items-baseline justify-between gap-2">
+      <dt className="text-slate-500 shrink-0">{label}</dt>
+      <dd className="font-medium text-slate-900 text-right truncate">{value}</dd>
+    </div>
   );
 }
 
 const fmt = (n: number, digits = 0) =>
   n.toLocaleString("id-ID", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-/** Figma "Frame 21": hotspot detail card shown above the selected marker. */
-export function HotspotCard({ hotspot, priorityRank }: HotspotCardProps) {
+/** Compact hotspot detail card shown above the selected marker. */
+export function HotspotCard({ hotspot, priorityRank, onInvestigate, onClose }: HotspotCardProps) {
   const meta = SEVERITY_META[hotspot.severity];
+  const env = getHotspotEnvironment(hotspot);
 
   return (
-    <div className="relative h-[280px] w-[265.385px] text-black">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img alt="" src="/figma/popup-bg.svg" className="absolute inset-0 block size-full max-w-none" />
-
-      <div className="absolute left-[11px] top-[11px] w-[237px] font-sans">
-        <div className="ml-[3px] flex w-[234px] items-start justify-between">
-          <p className="text-[12px] font-bold leading-[1.4] tracking-[0.12px]">{hotspot.id}</p>
+    <div className="relative w-[244px] rounded-xl border border-slate-300 bg-white/95 p-2.5 text-slate-900 shadow-xl backdrop-blur-md">
+      <div className="flex items-center justify-between gap-1 border-b border-slate-200 pb-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-xs font-bold">{hotspot.id}</span>
           <span
-            className="flex h-[18px] items-center gap-1 rounded-[20px] px-1"
+            className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
             style={{ backgroundColor: meta.surface }}
           >
-            <span className="size-[10px] rounded-full" style={{ backgroundColor: meta.color }} />
-            <span className="text-[10px] font-medium leading-[1.4] tracking-[0.1px]">{meta.label}</span>
+            <span className="size-2 rounded-full" style={{ backgroundColor: meta.color }} />
+            <span>{meta.label}</span>
           </span>
         </div>
-        <div className="ml-[2px] mt-[5px] h-px w-[234px] bg-black" />
-
-        <p className="ml-[4px] mt-[4px] flex h-[20px] w-[233px] items-center rounded-[20px] bg-[rgba(217,119,6,0.08)] px-2 text-[10px] font-medium leading-[1.4] tracking-[0.1px]">
-          Prioritas: #{priorityRank} · Skor risiko {fmt(hotspot.riskScore, 1)}
-        </p>
-
-        <div className="mt-[6px] flex w-[236px] flex-col gap-[2px] text-[9px] leading-[1.4] tracking-[0.09px]">
-          <dl className="grid grid-cols-[84px_1fr] font-medium">
-            <Row label="Luas" value={`${fmt(hotspot.areaHa)} ha`} />
-            <Row label="dNBR rata-rata" value={fmt(hotspot.dnbrMean, 2)} />
-            <Row label="Citra pra/pasca" value={hotspot.imagery} />
-          </dl>
-          <div className="h-px w-full bg-black" />
-          <dl className="grid grid-cols-[84px_1fr]">
-            <Row label="Lahan gambut" value={hotspot.peatland ? "Ya" : "Tidak"} />
-            <Row label="Jarak permukiman" value={`${fmt(hotspot.settlementKm, 1)} km`} />
-            <Row label="Status" value={hotspot.status} />
-          </dl>
-          <div className="h-px w-full bg-black" />
-          <dl className="grid grid-cols-[43px_1fr] gap-y-[2px]">
-            <Row label="Lokasi" value={hotspot.location} />
-            <Row
-              label="Catatan"
-              value={
-                <>
-                  Tipe kebakaran: {hotspot.fireType}
-                  <br />
-                  Kondisi tanah: {hotspot.soil}
-                  <br />
-                  Kondisi terakhir: {hotspot.lastCondition}
-                </>
-              }
-            />
-          </dl>
-          <div className="h-px w-full bg-black" />
-          <p>
-            <span className="font-bold">Sumber satelit </span>
-            {hotspot.satellite}
-          </p>
+        <div className="flex items-center gap-1">
+          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-800">
+            #{priorityRank} · {fmt(hotspot.riskScore, 1)}
+          </span>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Tutup kartu"
+            >
+              <X className="size-3" />
+            </button>
+          )}
         </div>
       </div>
+
+      <div className="mt-1.5 space-y-1 text-[10px] leading-tight">
+        <p className="truncate font-semibold text-slate-800" title={hotspot.location}>
+          {hotspot.location}
+        </p>
+        <dl className="space-y-0.5 border-y border-slate-100 py-1">
+          <Row label="Luas & dNBR" value={`${fmt(hotspot.areaHa)} ha · dNBR ${fmt(hotspot.dnbrMean, 2)}`} />
+          <Row label="Radius Sebaran" value={`${fmt(env.majorAxisKm, 1)} × ${fmt(env.minorAxisKm, 1)} km`} />
+          <Row label="Angin & Arah" value={`${env.windSpeedKmh} km/j → ${env.windDirectionLabel}`} />
+          <Row label="Flamabilitas" value={`${Math.round(env.flammabilityIndex * 100)}% · ${hotspot.soil}`} />
+          <Row label="Permukiman" value={`${fmt(hotspot.settlementKm, 1)} km · ETA ${hotspot.etaMin}m`} />
+        </dl>
+
+        {onInvestigate && (
+          <button
+            type="button"
+            onClick={() => onInvestigate(hotspot)}
+            className="mt-1 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-2.5 py-1.5 text-[11px] font-semibold text-slate-950 shadow-xs transition-colors hover:bg-amber-400"
+          >
+            <Bot className="size-3.5" />
+            <span>Investigasi Klaster via AI</span>
+          </button>
+        )}
+      </div>
+
+      {/* Bottom pointer triangle */}
+      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 size-3 rotate-45 border-b border-r border-slate-300 bg-white" />
     </div>
   );
 }

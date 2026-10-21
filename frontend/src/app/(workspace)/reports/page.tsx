@@ -1,12 +1,11 @@
 import React from "react";
-import { ReportList } from "@/components/reports/report-list";
+import { MonitorDashboard } from "@/components/monitor/monitor-dashboard";
 
 export const metadata = {
-  title: "Reports & Case History — SIGAP",
-  description:
-    "Daftar riwayat investigasi karhutla live NASA FIRMS + DINOv3, ringkasan bukti satelit, dan ekspor laporan format PDF serta GeoJSON.",
+  title: "SIGAP — Unified Wildfire Command Center",
+  description: "Daftar riwayat investigasi karhutla live NASA FIRMS + DINOv3, peta interaktif, dan konsol AI dalam satu layar.",
 };
 
 export default function ReportsPage() {
-  return <ReportList />;
+  return <MonitorDashboard initialDrawer="reports" />;
 }

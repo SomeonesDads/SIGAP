@@ -18,26 +18,21 @@ export function SeverityLegend({ size = "desktop", hidden, onToggle, className }
   return (
     <div
       className={cn(
-        "rounded-[20px] bg-[rgba(217,217,217,0.75)] backdrop-blur-[2px]",
-        isDesktop ? "p-8" : "flex justify-center p-4",
+        "rounded-xl border border-slate-300/80 bg-white/90 backdrop-blur-md shadow-md",
+        isDesktop ? "px-3 py-2" : "px-2.5 py-1.5",
         className
       )}
     >
-      <div className={cn("flex flex-col items-start", isDesktop ? "w-[436px] gap-6" : "w-[304px] gap-[10px]")}>
-        <p
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span
           className={cn(
-            "font-mono font-medium leading-none text-black",
-            isDesktop ? "text-[24px] tracking-[-0.48px]" : "text-[16px] tracking-[-0.32px]"
+            "font-mono font-bold uppercase tracking-wider text-slate-700",
+            isDesktop ? "text-[10px]" : "text-[9px]"
           )}
         >
-          LEGENDA KEPARAHAN KEBAKARAN
-        </p>
-        <div
-          className={cn(
-            "grid",
-            isDesktop ? "grid-cols-[156px_156px_auto]" : "grid-cols-[108px_108px_auto]"
-          )}
-        >
+          Keparahan:
+        </span>
+        <div className="flex items-center gap-2">
           {ORDER.map((severity) => {
             const meta = SEVERITY_META[severity];
             const isHidden = hidden.has(severity);
@@ -49,18 +44,19 @@ export function SeverityLegend({ size = "desktop", hidden, onToggle, className }
                 title={isHidden ? `Tampilkan hotspot ${meta.label}` : `Sembunyikan hotspot ${meta.label}`}
                 onClick={() => onToggle(severity)}
                 className={cn(
-                  "flex w-fit cursor-pointer items-center gap-4 rounded-md transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sigap-cobalt",
-                  isHidden && "opacity-40 hover:opacity-60"
+                  "flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-0.5 transition-all hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sigap-cobalt",
+                  isHidden
+                    ? "border-slate-200 bg-slate-50 opacity-45"
+                    : "border-slate-200 bg-white shadow-2xs"
                 )}
               >
                 <span
-                  className={cn("shrink-0 rounded-[5px]", isDesktop ? "size-6" : "size-4")}
+                  className="size-2.5 shrink-0 rounded-[3px]"
                   style={{ backgroundColor: meta.color }}
                 />
                 <span
                   className={cn(
-                    "whitespace-nowrap font-mono font-semibold leading-none text-black",
-                    isDesktop ? "text-[24px] tracking-[-0.48px]" : "text-[16px] tracking-[-0.32px]",
+                    "whitespace-nowrap font-mono text-[11px] font-semibold leading-none text-slate-800",
                     isHidden && "line-through"
                   )}
                 >

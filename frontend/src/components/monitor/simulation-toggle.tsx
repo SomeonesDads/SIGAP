@@ -17,14 +17,14 @@ export function SimulationToggle({ checked, onChange, size = "desktop" }: Simula
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        "group flex shrink-0 cursor-pointer items-center rounded-full focus-visible:outline-none",
-        isDesktop ? "gap-4" : "gap-1"
+        "group flex shrink-0 cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 transition-colors hover:bg-slate-50 focus-visible:outline-none",
+        isDesktop ? "gap-2 h-8" : "gap-1.5 h-7"
       )}
     >
       <span
         className={cn(
-          "relative shrink-0 rounded-full transition-transform group-hover:scale-[1.03] group-active:scale-95 group-focus-visible:ring-2 group-focus-visible:ring-sigap-cobalt group-focus-visible:ring-offset-2",
-          isDesktop ? "h-[50px] w-[100px]" : "h-[29px] w-[58px]"
+          "relative shrink-0 rounded-full transition-transform group-hover:scale-[1.03] group-active:scale-95",
+          isDesktop ? "h-[18px] w-[36px]" : "h-[16px] w-[32px]"
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -37,10 +37,10 @@ export function SimulationToggle({ checked, onChange, size = "desktop" }: Simula
       <span
         className={cn(
           "whitespace-nowrap font-mono font-semibold leading-none text-slate-800",
-          isDesktop ? "text-[24px] tracking-[-0.48px]" : "text-[15px] tracking-[-0.3px]"
+          isDesktop ? "text-xs" : "text-[11px]"
         )}
       >
-        Simulation mode
+        Simulasi Drone
       </span>
     </button>
   );

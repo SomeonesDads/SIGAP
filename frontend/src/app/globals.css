@@ -60,3 +60,13 @@ body {
 .sigap-monitor-map .leaflet-tile-pane {
   filter: saturate(1.2);
 }
+
+.sigap-tactical-marker,
+.sigap-route-arrow {
+  background: transparent;
+  border: none;
+}
+
+.leaflet-popup-pane {
+  z-index: 1500 !important;
+}

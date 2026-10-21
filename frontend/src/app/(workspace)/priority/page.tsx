@@ -1,12 +1,11 @@
 import React from "react";
-import { PriorityTable } from "@/components/priority/priority-table";
+import { MonitorDashboard } from "@/components/monitor/monitor-dashboard";
 
 export const metadata = {
-  title: "Priority Assessment — SIGAP",
-  description:
-    "Penilaian prioritas respon karhutla berbasis multikriteria: kedalaman gambut, kedekatan pemukiman, dan estimasi keparahan terbakar.",
+  title: "SIGAP — Unified Wildfire Command Center",
+  description: "Penilaian prioritas respon karhutla MCDA, peta interaktif, dan konsol investigasi AI dalam satu layar.",
 };
 
 export default function PriorityPage() {
-  return <PriorityTable />;
+  return <MonitorDashboard initialDrawer="priority" />;
 }

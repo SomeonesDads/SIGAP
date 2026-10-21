@@ -129,12 +129,12 @@ export function LocationSearch({
     <div className={cn("relative", className)}>
       <label
         className={cn(
-          "flex w-full cursor-text items-center rounded-[10px] border border-slate-400 bg-slate-50 pl-4 pr-4 transition-shadow focus-within:border-sigap-cobalt focus-within:ring-2 focus-within:ring-sigap-cobalt/30",
-          isDesktop ? "h-[58px] gap-6" : "h-[34px] gap-6"
+          "flex w-full cursor-text items-center rounded-lg border border-slate-300 bg-white px-2.5 transition-shadow focus-within:border-sigap-cobalt focus-within:ring-2 focus-within:ring-sigap-cobalt/25",
+          isDesktop ? "h-8 gap-2" : "h-7 gap-1.5"
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img alt="" src="/figma/search.svg" className="block size-[21px] shrink-0 max-w-none" />
+        <img alt="" src="/figma/search.svg" className="block size-3.5 shrink-0 max-w-none opacity-70" />
         <input
           ref={inputRef}
           type="search"
@@ -153,8 +153,8 @@ export function LocationSearch({
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
           className={cn(
-            "w-full min-w-0 bg-transparent font-mono font-semibold leading-none text-slate-800 outline-none placeholder:text-slate-600 [&::-webkit-search-cancel-button]:cursor-pointer",
-            isDesktop ? "text-[24px] tracking-[-0.48px]" : "text-[16px] tracking-[-0.32px]"
+            "w-full min-w-0 bg-transparent font-mono font-medium leading-none text-slate-800 outline-none placeholder:text-slate-500 [&::-webkit-search-cancel-button]:cursor-pointer",
+            isDesktop ? "text-xs" : "text-[11px]"
           )}
         />
       </label>
@@ -163,10 +163,10 @@ export function LocationSearch({
         <ul
           id={listId}
           role="listbox"
-          className="absolute inset-x-0 top-[calc(100%+6px)] z-[1100] overflow-hidden rounded-[10px] border border-slate-400 bg-slate-50 py-1 shadow-[0_4px_12px_rgba(0,0,0,0.18)]"
+          className="absolute inset-x-0 top-[calc(100%+4px)] z-[1100] max-h-64 overflow-y-auto rounded-lg border border-slate-300 bg-white py-1 shadow-lg"
         >
           {results.length === 0 && (
-            <li className="px-4 py-3 font-mono text-sm text-slate-600">
+            <li className="px-3 py-2 font-mono text-xs text-slate-500">
               Mencari lokasi di Indonesia...
             </li>
           )}
@@ -179,31 +179,31 @@ export function LocationSearch({
                 onClick={() => choose(r)}
                 onMouseEnter={() => setActive(i)}
                 className={cn(
-                  "flex w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left",
-                  i === active ? "bg-slate-200" : "hover:bg-slate-100"
+                  "flex w-full cursor-pointer items-center gap-2.5 px-3 py-1.5 text-left",
+                  i === active ? "bg-slate-100" : "hover:bg-slate-50"
                 )}
               >
                 {r.kind === "hotspot" ? (
                   <span
-                    className="size-3 shrink-0 rounded-[3px]"
+                    className="size-2.5 shrink-0 rounded-[2px]"
                     style={{ backgroundColor: SEVERITY_META[r.hotspot.severity].color }}
                   />
                 ) : (
-                  <MapPin className="size-4 shrink-0 text-slate-600" />
+                  <MapPin className="size-3.5 shrink-0 text-slate-500" />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 font-mono text-sm font-semibold text-slate-800">
+                  <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-slate-800">
                     <span className="truncate">
                       {r.kind === "hotspot" ? r.hotspot.id : r.place.name}
                     </span>
                     {r.kind === "place" && r.badge && (
-                      <span className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800">
+                      <span className="shrink-0 rounded bg-emerald-500/15 px-1 py-0.2 text-[9px] font-medium text-emerald-800">
                         {r.badge}
                       </span>
                     )}
                   </span>
                   {r.kind === "hotspot" && (
-                    <span className="block truncate text-xs text-slate-600">{r.hotspot.location}</span>
+                    <span className="block truncate text-[11px] text-slate-500">{r.hotspot.location}</span>
                   )}
                 </span>
               </button>
