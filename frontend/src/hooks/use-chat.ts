@@ -198,7 +198,7 @@ export function useChat() {
     };
   }, []);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, targetHotspot?: Hotspot) => {
     if (!content.trim() || isExecutingRef.current) return;
     isExecutingRef.current = true;
 
@@ -291,6 +291,7 @@ export function useChat() {
           "abaikan instruksi",
         ].some((kw) => qLowerCheck.includes(kw)) ||
         (!clientRegion &&
+          !targetHotspot &&
           ![
             "api",
             "kebakaran",
@@ -408,8 +409,9 @@ export function useChat() {
       }
       const regionName = explicitRegion || lastRegionRef.current || "Indonesia";
       const liveFeed = await fetchMonitoringHotspots(regionName, 5);
-      const topHotspot = liveFeed.hotspots[0];
-      const hasFires = liveFeed.total_raw_hotspots > 0 && Boolean(topHotspot);
+      // Investigating a specific cluster must stay pinned to it, not the region's top-ranked one
+      const topHotspot = targetHotspot ?? liveFeed.hotspots[0];
+      const hasFires = Boolean(targetHotspot) || (liveFeed.total_raw_hotspots > 0 && Boolean(topHotspot));
       if (topHotspot) {
         setActiveCluster({ ...topHotspot });
         setFocusSeq((n) => n + 1);

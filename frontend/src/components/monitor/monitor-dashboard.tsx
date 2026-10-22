@@ -39,6 +39,7 @@ import {
   SAMPLE_HOTSPOTS,
   createDrones,
   rankHotspots,
+  rawPointToHotspot,
   stepSimulation,
   type Drone,
   type Hotspot,
@@ -388,10 +389,40 @@ export function MonitorDashboard({
       setMobileView((v) => (v === "map" ? "split" : v));
       focusHotspot(hotspot, 11);
       sendMessage(
-        `Saya beroperasi di ${hotspot.location} (${hotspot.district ?? "Indonesia"}). Berikan rencana alokasi sumber daya taktis di sekeliling perimeter luar (POS-1 s/d POS-4 & UDP-1) untuk memadamkan klaster ${hotspot.id} tanpa memasuki pusat api.`
+        `Saya beroperasi di ${hotspot.location} (${hotspot.district ?? "Indonesia"}). Berikan rencana alokasi sumber daya taktis di sekeliling perimeter luar (POS-1 s/d POS-4 & UDP-1) untuk memadamkan klaster ${hotspot.id} tanpa memasuki pusat api.`,
+        hotspot
       );
     },
     [focusHotspot, sendMessage]
+  );
+
+  // A cluster ID typed in chat (e.g. "HS-0421", "HS-RAW-...") pins the investigation to that exact hotspot
+  const handleChatSend = useCallback(
+    (content: string) => {
+      const ids = (content.match(/\bHS-[A-Z0-9-]+\b/gi) ?? []).map((id) => id.toUpperCase());
+      if (ids.length === 0) {
+        sendMessage(content);
+        return;
+      }
+      const known = [
+        ...hotspots,
+        ...(selectedCustomHotspot ? [selectedCustomHotspot] : []),
+        ...(activeCluster ? [activeCluster] : []),
+      ];
+      let target = known.find((h) => ids.includes(h.id.toUpperCase()));
+      if (!target) {
+        const rawIdx = rawHotspots.findIndex((pt, idx) =>
+          ids.includes(rawPointToHotspot(pt, idx, hotspots).id.toUpperCase())
+        );
+        if (rawIdx >= 0) target = rawPointToHotspot(rawHotspots[rawIdx], rawIdx, hotspots);
+      }
+      if (target) {
+        setMobileView((v) => (v === "map" ? "split" : v));
+        focusHotspot(target, 11);
+      }
+      sendMessage(content, target);
+    },
+    [hotspots, selectedCustomHotspot, activeCluster, rawHotspots, focusHotspot, sendMessage]
   );
 
   const onMapSelect = useCallback(
@@ -1483,7 +1514,7 @@ export function MonitorDashboard({
 
           {/* Compact Chat Input Bar */}
           <div className="shrink-0 border-t border-slate-200 bg-white p-2">
-            <ChatInput onSend={sendMessage} isLoading={isLoading} />
+            <ChatInput onSend={handleChatSend} isLoading={isLoading} />
           </div>
         </aside>
       </div>
