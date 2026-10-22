@@ -53,13 +53,21 @@ def score_hotspot_priority(
         from data.geospatial.priority import PriorityFactors, compute_priority_score, explain_priority as internal_explain
 
         factors = PriorityFactors(
-            is_peatland=bool(context_data.get("is_peatland", True)),
-            distance_to_settlement_km=float(context_data.get("distance_to_settlement_km", 2.0)),
-            hotspot_count=int(cluster_data.get("hotspot_count", 6)),
+            is_peatland=bool(context_data.get("is_peatland", cluster_data.get("peatland", True))),
+            distance_to_settlement_km=float(context_data.get("distance_to_settlement_km", cluster_data.get("settlementKm", 2.0))),
+            hotspot_count=int(cluster_data.get("hotspot_count", cluster_data.get("hotspotCount", 6))),
             hotspot_recurrence=int(cluster_data.get("hotspot_recurrence", 2)),
-            estimated_burned_area_ha=float(context_data.get("estimated_burned_area_ha", 45.0)),
+            estimated_burned_area_ha=float(context_data.get("estimated_burned_area_ha", cluster_data.get("areaHa", 45.0))),
             dnbr_severity=str(context_data.get("dnbr_severity", "high_severity")),
             evidence_quality=float(context_data.get("evidence_quality", 0.95)),
+            wind_speed_kmh=float(context_data.get("wind_speed_kmh", cluster_data.get("windSpeedKmh", 18.0))),
+            wind_towards_settlement_alignment=float(
+                context_data.get("wind_towards_settlement_alignment", cluster_data.get("downwindAlignment", 0.35))
+            ),
+            flammability_index=float(context_data.get("flammability_index", cluster_data.get("flammabilityIndex", 0.82))),
+            sensor_agreement_confidence=float(
+                context_data.get("sensor_agreement_confidence", cluster_data.get("sensorConfidence", 0.92))
+            ),
         )
 
         score = compute_priority_score(factors)
@@ -72,12 +80,15 @@ def score_hotspot_priority(
             "priority_score": score,
             "priority_level": level,
             "factors_breakdown": {
-                "peatland_subscore": 100.0 if factors.is_peatland else 0.0,
-                "settlement_proximity_subscore": 85.0,
+                "peatland_subscore": 100.0 if factors.is_peatland else round(max(0.0, (factors.flammability_index - 0.55) * 60.0), 1),
+                "settlement_proximity_subscore": round(max(0.0, 100.0 - factors.distance_to_settlement_km * 8.0), 1),
                 "hotspot_count_subscore": min(100.0, (factors.hotspot_count / 20.0) * 100.0),
                 "hotspot_recurrence_subscore": min(100.0, (factors.hotspot_recurrence / 5.0) * 100.0),
                 "burned_area_subscore": min(100.0, (factors.estimated_burned_area_ha / 100.0) * 100.0),
-                "dnbr_severity_subscore": 100.0,
+                "dnbr_severity_subscore": 100.0 if "high" in factors.dnbr_severity else 65.0,
+                "wind_speed_kmh": factors.wind_speed_kmh,
+                "downwind_alignment": factors.wind_towards_settlement_alignment,
+                "sensor_agreement_confidence": factors.sensor_agreement_confidence,
             },
             "weights_applied": {
                 "peatland": 0.25,

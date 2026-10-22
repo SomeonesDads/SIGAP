@@ -38,6 +38,11 @@ class PriorityFactors:
         dnbr_severity: Qualitative severity string ('high_severity', 'moderate_high_severity',
             'moderate_low_severity', 'low_severity', 'unburned').
         evidence_quality: Confidence multiplier based on cloud absence and sensor reliability (0.0 to 1.0).
+        wind_speed_kmh: Surface wind speed in km/h driving fire front propagation.
+        wind_towards_settlement_alignment: Cosine alignment [-1.0, 1.0] between wind vector and
+            the vector from the fire cluster toward the nearest settlement (+1.0 = directly downwind).
+        flammability_index: Fuel dryness / flammability index (0.0 to 1.0).
+        sensor_agreement_confidence: Multi-sensor cross-validation confidence (0.0 to 1.0).
     """
 
     is_peatland: bool = False
@@ -47,6 +52,10 @@ class PriorityFactors:
     estimated_burned_area_ha: float = 0.0
     dnbr_severity: str = "unburned"
     evidence_quality: float = 1.0
+    wind_speed_kmh: float = 12.0
+    wind_towards_settlement_alignment: float = 0.0
+    flammability_index: float = 0.5
+    sensor_agreement_confidence: float = 0.9
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert factors to a dictionary."""
@@ -73,22 +82,28 @@ def compute_priority_score(
 
     w = weights if weights is not None else DEFAULT_WEIGHTS
 
-    # 1. Peatland component (0 or 100)
-    peat_subscore = 100.0 if f.is_peatland else 0.0
+    # 1. Peatland component (0 or 100, modulated slightly by fuel flammability)
+    peat_subscore = 100.0 if f.is_peatland else max(0.0, (float(f.flammability_index) - 0.55) * 60.0)
 
-    # 2. Settlement proximity component
-    # <1 km: 100, <3 km: 80, <5 km: 60, <10 km: 30, >=10 km: 0
+    # 2. Settlement proximity component with Downwind Wind-Vector Threat adjustment
+    # Effective distance shrinks when strong wind blows directly from fire toward settlement
     dist = max(0.0, float(f.distance_to_settlement_km))
-    if dist <= 1.0:
+    wind_kmh = max(0.0, float(f.wind_speed_kmh))
+    alignment = max(-1.0, min(1.0, float(f.wind_towards_settlement_alignment)))
+    wind_factor = 1.0 - (alignment * min(0.40, (wind_kmh / 35.0) * 0.40))
+    effective_dist = dist * max(0.55, min(1.25, wind_factor))
+
+    if effective_dist <= 1.0:
         settlement_subscore = 100.0
-    elif dist <= 3.0:
-        settlement_subscore = 80.0
-    elif dist <= 5.0:
-        settlement_subscore = 55.0
-    elif dist <= 10.0:
-        settlement_subscore = 25.0
+    elif effective_dist <= 3.0:
+        settlement_subscore = 80.0 + (3.0 - effective_dist) * 10.0
+    elif effective_dist <= 5.0:
+        settlement_subscore = 55.0 + (5.0 - effective_dist) * 12.5
+    elif effective_dist <= 10.0:
+        settlement_subscore = 25.0 + (10.0 - effective_dist) * 6.0
     else:
-        settlement_subscore = max(0.0, 10.0 - (dist - 10.0))
+        settlement_subscore = max(0.0, 10.0 - (effective_dist - 10.0))
+    settlement_subscore = min(100.0, settlement_subscore)
 
     # 3. Hotspot count subscore (saturates at 20 hotspots)
     count_subscore = min(100.0, (f.hotspot_count / 20.0) * 100.0)
@@ -124,9 +139,11 @@ def compute_priority_score(
         + w.get("dnbr_severity", 0.10) * dnbr_subscore
     )
 
-    # Scale by evidence quality (e.g. cloudy imagery reduces score confidence)
+    # Scale by combined evidence quality and multi-sensor cross-validation agreement
     quality = max(0.1, min(1.0, float(f.evidence_quality)))
-    final_score = raw_score * (0.8 + 0.2 * quality)
+    sensor_conf = max(0.2, min(1.0, float(f.sensor_agreement_confidence)))
+    combined_confidence = 0.65 * quality + 0.35 * sensor_conf
+    final_score = raw_score * (0.78 + 0.22 * combined_confidence)
 
     return round(float(min(100.0, max(0.0, final_score))), 1)
 
@@ -201,6 +218,11 @@ def explain_priority(area: Dict[str, Any]) -> str:
     elif f.distance_to_settlement_km <= 5.0:
         reasons.append(f"Berada di sekitar radius permukiman ({f.distance_to_settlement_km:.1f} km)")
 
+    if f.wind_towards_settlement_alignment >= 0.25 and f.wind_speed_kmh >= 14.0:
+        reasons.append(
+            f"Vektor angin kencang ({f.wind_speed_kmh:.0f} km/j) mendorong perambatan kepala api & asap mengarah ke permukiman (downwind threat)"
+        )
+
     if f.hotspot_count >= 5:
         reasons.append(f"Konsentrasi titik panas tinggi ({f.hotspot_count} hotspot terdeteksi)")
 
@@ -213,6 +235,11 @@ def explain_priority(area: Dict[str, Any]) -> str:
     if str(f.dnbr_severity).lower() in ("high", "high_severity", "moderate_high_severity"):
         reasons.append(f"Indeks dNBR mengonfirmasi tingkat kerusakan vegetasi tinggi ({f.dnbr_severity})")
 
+    if f.sensor_agreement_confidence >= 0.85:
+        reasons.append(f"Validasi lintas-sensor satelit tinggi (kepercayaan {int(f.sensor_agreement_confidence * 100)}%)")
+    elif f.sensor_agreement_confidence < 0.55:
+        reasons.append("Deteksi satelit tunggal berintensitas rendah (perlu verifikasi lapangan terhadap potensi false positive)")
+
     if f.evidence_quality < 0.7:
         reasons.append("Catatan: Kualitas observasi satelit terhambat awan, verifikasi darat/patroli direkomendasikan")
 
@@ -224,3 +251,4 @@ def explain_priority(area: Dict[str, Any]) -> str:
         f"Alasan Utama: " + "; ".join(reasons) + "."
     )
     return summary_text
+
