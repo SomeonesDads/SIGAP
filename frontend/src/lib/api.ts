@@ -1,7 +1,13 @@
 import type { Investigation } from "@/lib/types";
 import { SAMPLE_HOTSPOTS, type Hotspot } from "@/lib/monitoring";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined" &&
+  window.location.hostname !== "localhost" &&
+  window.location.hostname !== "127.0.0.1"
+    ? ""
+    : "http://localhost:8000");
 
 export interface MonitoringHotspotsResponse {
   is_live: boolean;
