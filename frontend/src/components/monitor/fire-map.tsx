@@ -21,6 +21,7 @@ import {
   buildIndonesianPeatlandBasins,
   buildIndonesianSettlementZones,
   buildTacticalAllocationPlan,
+  rawPointToHotspot,
   type Drone,
   type Hotspot,
   type TacticalDeploymentPoint,
@@ -52,6 +53,23 @@ function fireIcon(hotspot: Hotspot, selected: boolean): L.DivIcon {
     iconSize: [14, 18],
     iconAnchor: [7, 9],
     html: `<img src="${meta.icon}" width="14" height="18" alt="" style="display:block;max-width:none;cursor:pointer"/>`,
+  });
+}
+
+function rawFireIcon(frp: number, confidence?: string): L.DivIcon {
+  const conf = String(confidence ?? "").toLowerCase();
+  const severity =
+    frp >= 28 || conf === "high" || conf === "h"
+      ? "tinggi"
+      : frp >= 12 || conf === "nominal" || conf === "n"
+      ? "sedang"
+      : "rendah";
+  const iconSrc = SEVERITY_META[severity].icon;
+  return L.divIcon({
+    className: "sigap-marker",
+    iconSize: [12, 16],
+    iconAnchor: [6, 8],
+    html: `<img src="${iconSrc}" width="12" height="16" alt="" style="display:block;max-width:none;cursor:pointer;opacity:0.92"/>`,
   });
 }
 
@@ -187,8 +205,41 @@ export default function FireMap({
 }: FireMapProps) {
   const [mapZoom, setMapZoom] = useState(5);
   const [hasOpenPopup, setHasOpenPopup] = useState(false);
-  const selected = hotspots.find((h) => h.id === selectedId) ?? null;
-  const hotspotById = useMemo(() => new Map(hotspots.map((h) => [h.id, h])), [hotspots]);
+
+  const rawHotspotItems = useMemo(() => {
+    const seenIds = new Set<string>();
+    return rawHotspots
+      .slice(0, 300)
+      .map((hs, idx) => rawPointToHotspot(hs, idx, hotspots))
+      .filter((rh) => {
+        if (seenIds.has(rh.id)) return false;
+        seenIds.add(rh.id);
+        return !hotspots.some(
+          (h) => Math.abs(h.lat - rh.lat) < 0.002 && Math.abs(h.lon - rh.lon) < 0.002
+        );
+      });
+  }, [rawHotspots, hotspots]);
+
+  const selected = useMemo(
+    () =>
+      hotspots.find((h) => h.id === selectedId) ??
+      rawHotspotItems.find((h) => h.id === selectedId) ??
+      null,
+    [hotspots, rawHotspotItems, selectedId]
+  );
+
+  const hotspotsWithZones = useMemo(
+    () =>
+      selected && !hotspots.some((h) => h.id === selected.id)
+        ? [...hotspots, selected]
+        : hotspots,
+    [hotspots, selected]
+  );
+
+  const hotspotById = useMemo(
+    () => new Map([...rawHotspotItems, ...hotspots].map((h) => [h.id, h])),
+    [hotspots, rawHotspotItems]
+  );
 
   useEffect(() => {
     setHasOpenPopup(false);
@@ -313,9 +364,9 @@ export default function FireMap({
           );
         })}
 
-      {/* 2. DINOv3 BurnSeg Covered Area Overlays */}
+      {/* 2. DINOv3 BurnSeg Covered Area Overlays (Clusters + any clicked small fire) */}
       {(showSegmentation || showDnbr) &&
-        hotspots.map((h) => {
+        hotspotsWithZones.map((h) => {
           const rings = buildDinov3CoverageRings(h, mapZoom);
           return (
             <Fragment key={`${h.id}-dinov3`}>
@@ -444,33 +495,31 @@ export default function FireMap({
           </Fragment>
         ))}
 
-      {/* 5. Raw FIRMS Hotspot Points when zoomed in or active */}
+      {/* 5. Raw FIRMS Hotspot Points labeled with clickable fire logos that show zones when selected */}
       {showHotspots &&
-        mapZoom >= 7 &&
-        rawHotspots.slice(0, 150).map((hs, idx) => {
-          const frp = Number(hs.frp ?? 15.0);
+        mapZoom >= 4 &&
+        rawHotspotItems.map((rh) => {
+          const isSelected = rh.id === selectedId;
           return (
-            <CircleMarker
-              key={`raw-hs-${idx}`}
-              center={[hs.latitude, hs.longitude]}
-              radius={Math.min(8, Math.max(3.5, frp / 10))}
-              pathOptions={{
-                fillColor: frp >= 45 ? "#7f1d1d" : frp >= 20 ? "#dc2626" : "#f59e0b",
-                color: "#ffffff",
-                weight: 1,
-                opacity: 0.9,
-                fillOpacity: 0.85,
-              }}
-            >
-              <Popup>
-                <div className="text-xs space-y-0.5">
-                  <div className="font-bold text-red-700">🔥 Titik FIRMS #{idx + 1}</div>
-                  <div>FRP: {frp.toFixed(1)} MW ({hs.confidence})</div>
-                  <div>Waktu: {hs.acq_date} {hs.acq_time} UTC</div>
-                  <div>Satelit: {hs.satellite}</div>
-                </div>
-              </Popup>
-            </CircleMarker>
+            <Marker
+              key={rh.id}
+              position={[rh.lat, rh.lon]}
+              icon={
+                isSelected
+                  ? fireIcon(rh, true)
+                  : rawFireIcon(
+                      rh.totalFrp ?? 15,
+                      rh.severity === "tinggi"
+                        ? "high"
+                        : rh.severity === "sedang"
+                        ? "nominal"
+                        : "low"
+                    )
+              }
+              zIndexOffset={isSelected ? 500 : 100}
+              title={`${rh.id} — ${rh.location} (${SEVERITY_META[rh.severity].label})`}
+              eventHandlers={{ click: () => onSelect(rh) }}
+            />
           );
         })}
 

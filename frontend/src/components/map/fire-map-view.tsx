@@ -118,7 +118,7 @@ export function FireMapView() {
   // 1. Load live FIRMS monitoring clusters across all of Indonesia without resetting user's selected view
   useEffect(() => {
     let active = true;
-    fetchMonitoringHotspots("Indonesia", 35).then((res) => {
+    fetchMonitoringHotspots("Indonesia", 80).then((res) => {
       if (!active) return;
       if (res.hotspots.length > 0) {
         setLiveClusters(res.hotspots);
@@ -144,7 +144,7 @@ export function FireMapView() {
       totalFrp: liveClusters.reduce((acc, c) => acc + (c.totalFrp ?? 25), 0),
     };
 
-    const clusterOpts: RegionOption[] = liveClusters.slice(0, 20).map((c, idx) => {
+    const clusterOpts: RegionOption[] = liveClusters.slice(0, 40).map((c, idx) => {
       const count = c.hotspotCount ?? 1;
       const frp = c.totalFrp ?? 35;
       const scale = Math.min(2.4, Math.max(0.7, 0.75 + Math.log10(Math.max(1, count)) * 0.55));
@@ -190,7 +190,7 @@ export function FireMapView() {
     const focusLon = isNational ? (liveClusters[0]?.lon ?? 114.12) : lon;
 
     Promise.all([
-      fetchRawHotspots(currentRegionConfig.regionQuery, isNational ? 350 : 250),
+      fetchRawHotspots(currentRegionConfig.regionQuery, isNational ? 500 : 350),
       fetchSegmentationData(focusLat, focusLon, currentRegionConfig.scaleFactor),
       fetchSpatialContext(focusLat, focusLon),
       fetchImageryMetadata(currentRegionConfig.acqDate, focusLat, focusLon),
@@ -206,7 +206,7 @@ export function FireMapView() {
           const db = Math.hypot(b.latitude - lat, b.longitude - lon);
           return da - db;
         });
-        setRawHotspots(sortedByDist.slice(0, 120));
+        setRawHotspots(sortedByDist.slice(0, 250));
       }
       setSegmentation(seg);
       setSpatialContext(ctx);

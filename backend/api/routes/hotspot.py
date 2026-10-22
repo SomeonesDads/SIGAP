@@ -567,23 +567,24 @@ def _get_firms_api_key() -> str:
 
 
 def _build_archipelago_fallback_hotspots(fallback_date: str) -> list[dict[str, Any]]:
-    """Build a realistic multi-cluster nationwide thermal anomaly dataset across all 24 Indonesian fire-prone districts."""
+    """Build a realistic multi-cluster nationwide thermal anomaly dataset across all Indonesian fire-prone districts."""
     points: list[dict[str, Any]] = []
-    # Deterministic multi-point cluster templates around each district centroid (within ~1.5-3.5 km so DBSCAN groups them cleanly)
+    # Core cluster points (~0.8-1.5 km) plus surrounding satellite sub-epicenters (~5-14 km) so 3.5 km DBSCAN forms multiple distinct clusters per region
     offsets = [
         (0.0000, 0.0000, 1.00, "high", "N", "0615"),
         (0.0068, 0.0082, 0.85, "high", "N20", "0615"),
         (-0.0074, 0.0055, 0.72, "nominal", "N", "0630"),
         (0.0045, -0.0091, 0.64, "high", "N20", "0645"),
-        (-0.0092, -0.0062, 0.55, "nominal", "N", "0700"),
-        (0.0110, 0.0030, 0.48, "nominal", "N20", "0715"),
+        (0.0480, -0.0420, 0.78, "high", "N", "0650"),
+        (0.0530, -0.0380, 0.68, "nominal", "N20", "0655"),
+        (-0.0620, 0.0540, 0.62, "nominal", "N", "0700"),
+        (0.0850, 0.0680, 0.54, "nominal", "N20", "0715"),
     ]
     for idx, dist in enumerate(_INDONESIAN_DISTRICTS):
         base_lat = float(dist["lat"])
         base_lon = float(dist["lon"])
         is_peat = bool(dist.get("peatland"))
-        # Vary cluster size (3 to 6 points) and intensity so we get a realistic distribution of Tinggi / Sedang / Rendah clusters
-        num_pts = 6 if (idx % 3 == 0) else (4 if (idx % 2 == 0) else 3)
+        num_pts = 8 if (idx % 3 == 0) else (6 if (idx % 2 == 0) else 5)
         base_frp = (46.0 if is_peat else 34.0) - (idx % 5) * 4.2
         for p_idx in range(num_pts):
             d_lat, d_lon, frp_mult, conf, sat, acq_t = offsets[p_idx]
@@ -683,7 +684,7 @@ def _cross_validate_and_filter_hotspots(raw_points: list[dict[str, Any]]) -> lis
         is_nocturnal = 12 <= hour_utc <= 22
 
         # Filter isolated single-sensor low-confidence nocturnal thermal noise (e.g., industrial flare / roof reflection)
-        if conf in ("l", "low") and frp < 3.5 and grid_counts.get(cell, 1) == 1 and is_nocturnal:
+        if conf in ("l", "low") and frp < 1.5 and grid_counts.get(cell, 1) == 1 and is_nocturnal:
             continue
 
         enriched_pt = dict(pt)
@@ -855,8 +856,8 @@ async def get_hotspot_clusters(
     region: str = Query("Indonesia", description="Target region"),
     date_start: str | None = Query(None, description="Start date (YYYY-MM-DD)"),
     date_end: str | None = Query(None, description="End date (YYYY-MM-DD)"),
-    eps_km: float = Query(8.0, description="DBSCAN clustering radius in kilometers"),
-    min_samples: int = Query(2, description="Minimum points to form a cluster"),
+    eps_km: float = Query(3.5, description="DBSCAN clustering radius in kilometers"),
+    min_samples: int = Query(1, description="Minimum points to form a cluster"),
 ) -> list[HotspotCluster]:
     """Retrieve spatially clustered live hotspots using DBSCAN with spherical Haversine distance."""
     raw_list, _ = await fetch_live_or_fallback_hotspots(
@@ -865,7 +866,7 @@ async def get_hotspot_clusters(
         date_end=date_end,
     )
     clusters_raw = cluster_hotspots(raw_list, eps_km=eps_km, min_samples=min_samples)
-    diversified_clusters = _diversify_clusters_by_region(clusters_raw, limit=30)
+    diversified_clusters = _diversify_clusters_by_region(clusters_raw, limit=80)
 
     results: list[HotspotCluster] = []
     for idx, c in enumerate(diversified_clusters, start=1):
@@ -899,7 +900,7 @@ _MONITORING_CACHE: dict[tuple[str, int], tuple[float, dict[str, Any]]] = {}
 @router.get("/monitoring")
 async def get_monitoring_hotspots(
     region: str = Query("Indonesia", description="Target region or 'Indonesia'"),
-    limit: int = Query(30, ge=1, le=100, description="Max enriched priority hotspots to return"),
+    limit: int = Query(80, ge=1, le=250, description="Max enriched priority hotspots to return"),
 ) -> dict[str, Any]:
     """Return live NASA FIRMS hotspots aggregated, regionally diversified & scored across Indonesia."""
     cache_key = (region.lower().strip(), limit)
@@ -926,8 +927,8 @@ async def get_monitoring_hotspots(
     if not idn_points:
         idn_points = raw_list
 
-    # Cluster nearby points using DBSCAN (8 km radius, min 2 points)
-    clusters = cluster_hotspots(idn_points, eps_km=8.0, min_samples=2)
+    # Cluster nearby points using DBSCAN (3.5 km radius, min 1 point so more hotspots get labeled)
+    clusters = cluster_hotspots(idn_points, eps_km=3.5, min_samples=1)
 
     # Diversify across Indonesian islands & provinces so all active regions are represented
     candidate_groups: list[dict[str, Any]] = _diversify_clusters_by_region(clusters, limit=limit)
@@ -1041,9 +1042,9 @@ async def get_monitoring_hotspots(
         )
         risk_score = compute_priority_score(factors)
 
-        if risk_score >= 70.0:
+        if risk_score >= 55.0:
             severity = "tinggi"
-        elif risk_score >= 45.0:
+        elif risk_score >= 30.0:
             severity = "sedang"
         else:
             severity = "rendah"

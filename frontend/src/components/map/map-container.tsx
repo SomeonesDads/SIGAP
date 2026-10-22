@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Compass, Loader2, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildDinov3CoverageRings, type Hotspot } from "@/lib/monitoring";
+import { buildDinov3CoverageRings, rawPointToHotspot, type Hotspot } from "@/lib/monitoring";
 import type {
   RawHotspotPoint,
   SegmentationResponse,
@@ -50,6 +50,7 @@ export function MapContainer({
   const [isLoading, setIsLoading] = useState(true);
   const [mapZoom, setMapZoom] = useState<number>(zoom);
   const [basemap, setBasemap] = useState<"satellite" | "roadmap" | "terrain">("satellite");
+  const [selectedRawHotspot, setSelectedRawHotspot] = useState<Hotspot | null>(null);
 
   const BASEMAP_TILES = {
     satellite: {
@@ -193,9 +194,14 @@ export function MapContainer({
       groups.peatland.clearLayers();
       groups.settlement.clearLayers();
 
-      // 1. DINOV3 MULTI-RING COVERED AREA OVERLAYS ACROSS ALL ACTIVE INDONESIA CLUSTERS
+      // 1. DINOV3 MULTI-RING COVERED AREA OVERLAYS ACROSS ALL ACTIVE INDONESIA CLUSTERS + ANY CLICKED SMALL FIRE
       // (Rendered outermost Yellowish -> Amber-Orange -> Red-Orange -> Deep Red core)
-      clusters.forEach((c) => {
+      const clustersWithSelected =
+        selectedRawHotspot && !clusters.some((c) => c.id === selectedRawHotspot.id)
+          ? [...clusters, selectedRawHotspot]
+          : clusters;
+
+      clustersWithSelected.forEach((c) => {
         const rings = buildDinov3CoverageRings(c, mapZoom);
         rings.forEach((ring) => {
           const poly = L.polygon(ring.positions, {
@@ -282,17 +288,50 @@ export function MapContainer({
         });
       }
 
-      // 3. LIVE FIRMS HOTSPOTS LAYER (rendered on top of DINOv3 coverage polygons)
+      // 3. LIVE FIRMS HOTSPOTS & CLUSTERS LAYER (rendered with fire logo icons on top of DINOv3 coverage polygons)
+      clusters.forEach((c) => {
+        const iconSrc =
+          c.severity === "tinggi"
+            ? "/figma/fire-high.svg"
+            : c.severity === "sedang"
+            ? "/figma/fire-medium.svg"
+            : "/figma/fire-low.svg";
+        const cIcon = L.divIcon({
+          className: "sigap-marker",
+          iconSize: [16, 20],
+          iconAnchor: [8, 10],
+          html: `<img src="${iconSrc}" width="16" height="20" alt="" style="display:block;max-width:none;cursor:pointer"/>`,
+        });
+        const cMarker = L.marker([c.lat, c.lon], { icon: cIcon });
+        cMarker.bindPopup(`
+          <div style="font-family: system-ui; font-size: 12px; color: #0f172a; padding: 4px;">
+            <div style="font-weight: 700; color: #b91c1c; margin-bottom: 4px;">
+              🔥 ${c.id} — ${c.location}
+            </div>
+            <div><b>Wilayah:</b> ${c.district ?? "Indonesia"}</div>
+            <div><b>Keparahan:</b> ${c.severity.toUpperCase()} (Skor MCDA ${c.riskScore})</div>
+            <div><b>Titik Panas Klaster:</b> ${c.hotspotCount ?? 1} titik (FRP ${c.totalFrp ?? 25} MW)</div>
+          </div>
+        `);
+        cMarker.addTo(groups.hotspots);
+      });
+
       hotspots.forEach((hs, idx) => {
         const frp = Number(hs.frp ?? 15.0);
-        const marker = L.circleMarker([hs.latitude, hs.longitude], {
-          radius: Math.min(11, Math.max(4.5, frp / 7.5)),
-          fillColor: frp >= 45 ? "#7f1d1d" : frp >= 20 ? "#dc2626" : "#f59e0b",
-          color: "#ffffff",
-          weight: 1.3,
-          opacity: 0.95,
-          fillOpacity: 0.90,
+        const conf = String(hs.confidence ?? "").toLowerCase();
+        const iconSrc =
+          frp >= 28 || conf === "high" || conf === "h"
+            ? "/figma/fire-high.svg"
+            : frp >= 12 || conf === "nominal" || conf === "n"
+            ? "/figma/fire-medium.svg"
+            : "/figma/fire-low.svg";
+        const fIcon = L.divIcon({
+          className: "sigap-marker",
+          iconSize: [12, 16],
+          iconAnchor: [6, 8],
+          html: `<img src="${iconSrc}" width="12" height="16" alt="" style="display:block;max-width:none;cursor:pointer;opacity:0.92"/>`,
         });
+        const marker = L.marker([hs.latitude, hs.longitude], { icon: fIcon });
 
         const timeFormatted = hs.acq_time && hs.acq_time.length >= 4
           ? `${hs.acq_time.slice(0, 2)}:${hs.acq_time.slice(2, 4)} UTC`
@@ -311,6 +350,10 @@ export function MapContainer({
             <div><b>Koordinat:</b> ${hs.latitude.toFixed(4)}°, ${hs.longitude.toFixed(4)}°</div>
           </div>
         `);
+
+        marker.on("click", () => {
+          setSelectedRawHotspot(rawPointToHotspot(hs, idx, clusters));
+        });
 
         marker.addTo(groups.hotspots);
       });
@@ -385,7 +428,7 @@ export function MapContainer({
     }
 
     renderLiveLayers();
-  }, [isClient, hotspots, clusters, segmentation, spatialContext, mapZoom]);
+  }, [isClient, hotspots, clusters, segmentation, spatialContext, mapZoom, selectedRawHotspot]);
 
   // Handle Layer Toggle dynamically
   useEffect(() => {

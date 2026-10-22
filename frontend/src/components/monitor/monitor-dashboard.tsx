@@ -249,7 +249,7 @@ export function MonitorDashboard({
   useEffect(() => {
     let active = true;
     const loadLive = async () => {
-      const data = await fetchMonitoringHotspots("Indonesia", 35);
+      const data = await fetchMonitoringHotspots("Indonesia", 80);
       if (!active) return;
       if (simulationRef.current) {
         if (data.hotspots.length > 0) {
@@ -284,6 +284,8 @@ export function MonitorDashboard({
     };
   }, []);
 
+  const [selectedCustomHotspot, setSelectedCustomHotspot] = useState<Hotspot | null>(null);
+
   const ranked = useMemo(() => rankHotspots(hotspots), [hotspots]);
   const rankById = useMemo(() => new Map(ranked.map((h, i) => [h.id, i + 1])), [ranked]);
   const visible = useMemo(
@@ -293,12 +295,25 @@ export function MonitorDashboard({
   const priorities = visible.slice(0, PRIORITY_COUNT);
   const selectedHotspot =
     visible.find((h) => h.id === selectedId) ??
-    (activeCluster && activeCluster.id === selectedId ? activeCluster : null);
+    (activeCluster && activeCluster.id === selectedId ? activeCluster : null) ??
+    (selectedCustomHotspot && selectedCustomHotspot.id === selectedId ? selectedCustomHotspot : null);
 
   // Determine active focus coordinates for spatial layers & imagery comparison
   const focusTarget = selectedHotspot ?? activeCluster ?? ranked[0] ?? SAMPLE_HOTSPOTS[0];
 
-  // 3. Fetch raw hotspots, DINOv3 segmentation, and OSM context for focused cluster
+  // 3a. Load nationwide raw hotspots so small fire icons remain visible across Indonesia at all times
+  useEffect(() => {
+    let active = true;
+    fetchRawHotspots("Indonesia", 300).then((pts) => {
+      if (!active || pts.length === 0) return;
+      setRawHotspots(pts);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // 3b. Fetch DINOv3 segmentation and OSM context for focused cluster or clicked small fire
   useEffect(() => {
     if (!focusTarget) return;
     let active = true;
@@ -314,7 +329,18 @@ export function MonitorDashboard({
       fetchSpatialContext(lat, lon),
     ]).then(([pts, seg, ctx]) => {
       if (!active) return;
-      setRawHotspots(pts);
+      if (pts.length > 0) {
+        setRawHotspots((prev) => {
+          const merged = [...pts, ...prev];
+          const seen = new Set<string>();
+          return merged.filter((p) => {
+            const key = `${p.latitude.toFixed(4)}_${p.longitude.toFixed(4)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }).slice(0, 350);
+        });
+      }
       setSegmentation(seg);
       setSpatialContext(ctx);
     });
@@ -330,6 +356,7 @@ export function MonitorDashboard({
 
   const focusHotspot = useCallback((hotspot: Hotspot, minZoom = 11) => {
     setSelectedId(hotspot.id);
+    setSelectedCustomHotspot(hotspot);
     const map = mapRef.current;
     if (!map) return;
     const zoom = Math.max(map.getZoom(), minZoom);
@@ -369,14 +396,19 @@ export function MonitorDashboard({
 
   const onMapSelect = useCallback(
     (hotspot: Hotspot | null) => {
-      if (hotspot) focusHotspot(hotspot, 0);
-      else setSelectedId(null);
+      if (hotspot) {
+        focusHotspot(hotspot, 0);
+      } else {
+        setSelectedId(null);
+        setSelectedCustomHotspot(null);
+      }
     },
     [focusHotspot]
   );
 
   const focusPlace = useCallback((place: Place) => {
     setSelectedId(null);
+    setSelectedCustomHotspot(null);
     mapRef.current?.flyTo([place.lat, place.lon], place.zoom, { duration: 0.8 });
   }, []);
 
