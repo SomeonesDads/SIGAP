@@ -1,247 +1,210 @@
-# SIGAP — Agen Karhutla
-### Autonomous Wildfire Investigation & Response Prioritization Platform
+# SIGAP: Agen Karhutla
+### Platform Investigasi Otonom dan Prioritisasi Respons Kebakaran Hutan dan Lahan
 
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Google ADK](https://img.shields.io/badge/Google%20ADK-Multi--Agent-4285F4?style=flat&logo=google&logoColor=white)](https://google.github.io/adk-docs/)
-[![Gemini](https://img.shields.io/badge/Gemini-3.5%20Flash-8E75B2?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-U--Net-EE4C2C?style=flat&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+SIGAP (Sistem Informasi dan Tanggap Cepat Karhutla) adalah platform berbasis kecerdasan buatan dan sistem multi agen untuk pemantauan, investigasi geospasial, serta penentuan prioritas respons operasional kebakaran hutan dan lahan (karhutla) di Indonesia. Sistem ini menyatukan deteksi anomali termal satelit secara waktu nyata, akuisisi citra satelit multispektral, segmentasi area terbakar berbasis pemelajaran mendalam (deep learning), analisis tingkat keparahan kebakaran melalui indeks spektral dNBR, serta pemeringkatan risiko multikriteria ke dalam satu alur kerja terpadu.
 
----
+Target pengguna utama platform ini meliputi:
+* **BPBD (Badan Penanggulangan Bencana Daerah)**: Pusat komando penanggulangan bencana daerah yang mengoordinasikan respons darurat, logistik pemadaman, dan perlindungan warga.
+* **Manggala Agni (KLHK)**: Brigade pengendalian kebakaran hutan dan lahan di bawah Kementerian Lingkungan Hidup dan Kehutanan yang bertugas pada operasi pemadaman darat dan sekat bakar.
+* **KPH (Kesatuan Pengelolaan Hutan)**: Unit pengelolaan hutan yang mengawasi konsesi kehutanan, hutan konservasi, dan wilayah perbatasan hutan masyarakat.
+* **Tim Analis Kebakaran dan GIS**: Spesialis penginderaan jauh yang mengevaluasi luasan area terbakar, estimasi emisi karbon, dan kepatuhan lingkungan pascakebakaran.
 
-## 📌 Overview
+## 1. Masalah
 
-**SIGAP (Agen Karhutla)** is an AI-powered autonomous platform for wildfire monitoring, investigation, and operational response prioritization in Indonesia. The system unifies real-time thermal hotspot anomaly detection, multi-spectral satellite imagery acquisition, deep learning-based burned area segmentation, spectral burn severity analysis (dNBR), and multi-criteria risk ranking into a streamlined multi-agent workflow.
+Penanganan kebakaran hutan dan lahan di Indonesia, khususnya pada ekosistem lahan gambut tropis di Kalimantan dan Sumatra, menghadapi sejumlah kendala struktural dan operasional yang krusial:
 
-Unlike conventional passive monitoring dashboards, SIGAP incorporates a **Multi-Agent AI System** powered by [Google ADK](https://google.github.io/adk-docs/) with **6 specialized agents** orchestrated by a root Wildfire Response Orchestrator running on **Gemini 3.5 Flash**. The system goes beyond detection and notification — it performs strategic resource allocation across thousands of simultaneous hotspots, continuously adapting as conditions change.
+1. **Fragmentasi Sumber Data dan Keterlambatan Analisis**
+   Petugas operasional harus memeriksa berbagai portal terpisah secara manual, mulai dari titik panas (hotspot) satelit pada NASA FIRMS dan Sipongi KLHK, data cuaca dan arah angin dari BMKG, peta kedalaman gambut, hingga citra optik dari Landsat dan Sentinel. Proses pengumpulan, pengunduhan, dan pengolahan data spasial ini memakan waktu yang sangat lama (mulai dari hitungan jam hingga hari), sedangkan api di lahan gambut menyebar dengan cepat di bawah permukaan tanah.
 
-**Key architectural difference from rule-based systems:**
+2. **Tingginya Anomali Semu (False Positives) pada Titik Panas**
+   Deteksi titik panas satelit merupakan anomali termal, bukan konfirmasi kebakaran nyata. Pantulan panas atap industri, suar gas (flaring), atau pembakaran terkendali skala kecil sering memicu peringatan palsu. Tanpa verifikasi cerdas berbasis penginderaan jauh dan fusi multisensor, pengerahan tim darat ke lokasi yang salah akan menguras bahan bakar, logistik, dan tenaga personel.
 
-> **Traditional:** Hotspot detected → match nearest village → create ticket → alert team → escalate if no response. *Linear, static, per-ticket.*
->
-> **Agentic:** Hotspot detected → Perception Agent assesses credibility → Verification Agent checks if confirmation is needed → Risk Scoring Agent scores *relative to ALL active hotspots* → Routing Agent optimizes team assignments *across all available resources* → Coordination Agent executes and monitors → if conditions change, *the entire plan is recomposed*. *Cyclic, adaptive, cross-ticket.*
+3. **Alokasi Sumber Daya yang Statis dan Tidak Optimal**
+   Sistem pemantauan konvensional bekerja secara linear dan terisolasi per tiket laporan. Ketika ratusan titik panas muncul bersamaan pada puncak musim kemarau atau periode El Nino, pencocokan tim pemadam hanya berdasarkan jarak garis lurus terdekat (greedy dispatch) menyebabkan tim terkunci di lokasi berisiko rendah, sementara kebakaran gambut dalam yang mengancam permukiman kehilangan waktu emas pemadaman awal.
 
----
+4. **Hambatan Tutupan Awan dan Ketiadaan Bukti Terukur**
+   Wilayah tropis Indonesia sering tertutup awan tebal dan kabut asap yang menghalangi citra satelit optik. Sistem pemantauan biasa gagal memberikan estimasi luasan area terbakar dan tingkat keparahan ketika citra tertutup awan, serta tidak menyediakan jejak penalaran (audit trail) yang transparan bagi komandan lapangan untuk mempertanggungjawabkan keputusan pengerahan tim.
 
-## 🎯 Target Users & Operational Stakeholders
+## 2. Arsitektur Agent
 
-- **BPBD (Badan Penanggulangan Bencana Daerah)** — Regional disaster management agencies coordinating emergency ground response and community evacuation.
-- **Manggala Agni (KLHK)** — Fire brigade under the Ministry of Environment and Forestry tasked with ground suppression, firebreaks, and mop-up operations.
-- **KPH (Kesatuan Pengelolaan Hutan)** — Forest Management Units responsible for monitoring forest concessions and community forest perimeters.
-- **Fire Analysis & GIS Teams** — Remote sensing analysts assessing post-fire damage, carbon loss estimation, and environmental compliance.
+Berbeda dari dasbor pemantauan pasif yang hanya menampilkan peta titik panas, SIGAP mengimplementasikan arsitektur **Multi Agent AI** menggunakan **Google Agent Development Kit (ADK)** yang ditenagai oleh model **Gemini** melalui **Google Cloud Vertex AI**.
 
----
+Sistem ini menggunakan pola delegasi hierarkis yang dipimpin oleh satu agen pengarah utama (**Wildfire Response Orchestrator**) yang mengoordinasikan **6 agen spesialis**. Alur kerja bersifat siklikal, adaptif, dan mampu menyusun ulang rencana operasi secara menyeluruh apabila kondisi cuaca atau situasi lapangan berubah.
 
-## 🤖 Multi-Agent Architecture (6 Agents)
+### Agen Pengarah Utama: Wildfire Response Orchestrator (`root_agent`)
+Bertugas sebagai pusat penalaran dan pengendali alur kerja. Agen ini menerima perintah pengguna dalam bahasa Indonesia melalui antarmuka percakapan (AI Command Center) maupun pemicu data satelit, memecah tujuan menjadi rencana investigasi, mendelegasikan tugas ke 6 agen spesialis, menyatukan temuan menjadi laporan situasi (SITREP), serta menginisiasi perencanaan ulang (dynamic replanning) ketika muncul titik api kritis baru atau perubahan arah angin ekstrem.
 
-| Agent | Role |
-|---|---|
-| **1. Perception & Fusion** | Fuses data from FIRMS, Sipongi, BMKG, and field reports. Resolves conflicts across sensors and assesses *"what is the probability this is a real fire?"* |
-| **2. Risk Scoring** | Dynamic priority scoring using reasoning over land type, wind direction, settlement proximity, cluster growth trends, and historical fire recurrence. Weights adapt by season/context. |
-| **3. Verification** | Decides whether a hotspot needs pre-dispatch verification (drone, hi-res imagery, community confirmation) by weighing false-positive cost vs. delayed-response risk. |
-| **4. Routing & Dispatch** | Solves many-to-many assignment optimization: given N teams and M priority hotspots, which combination minimizes total loss? Uses real road access, water sources, and terrain — not straight-line distance. |
-| **5. Coordination** | Two-way communication with field crews, real-time ETA updates, obstacle handling, and human supervisor escalation for high-risk decisions (e.g., civilian evacuation). |
-| **6. Feedback & Learning** | Post-incident evaluation: were the priorities correct? How accurate was the initial confidence? Results update Risk Scoring weights — the system improves over time. |
+### Enam Agen Spesialis
 
-> See [`agents.md`](agents.md) for the full agent architecture documentation.
+1. **Perception and Fusion Agent (`perception_fusion`)**
+   * **Peran**: Menyatukan data anomali termal dari NASA FIRMS (sensor VIIRS 375m dan MODIS 1km), laporan cuaca, serta pengamatan lapangan untuk menghitung probabilitas kebakaran nyata.
+   * **Kapabilitas**: Mengelompokkan titik panas menggunakan algoritma spasial DBSCAN dengan jarak Haversine untuk menyaring derau suar industri, memanggil citra satelit pra kebakaran dan pasca kebakaran melalui Google Earth Engine dan AWS Earth Search (Sentinel 2 L2A), serta mengevaluasi persentase tutupan awan pada Area of Interest (AOI).
+   * **Perangkat (Tools)**: `fetch_hotspots`, `fetch_satellite_imagery`, `assess_image_quality`, serta agen bantu pencarian web (`GoogleSearchTool`) dan pembacaan konteks URL (`url_context`).
 
----
+2. **Risk Scoring Agent (`risk_scoring`)**
+   * **Peran**: Menghitung skor prioritas risiko dinamis (skala 0 hingga 100) untuk setiap klaster aktif relatif terhadap seluruh insiden lain yang sedang berlangsung.
+   * **Kapabilitas**: Menjalankan analisis keputusan multikriteria (MCDA) dengan mempertimbangkan kerentanan lahan gambut (Kesatuan Hidrologis Gambut), jarak terhadap permukiman warga, arah dan kecepatan angin pembawa asap, tren pertumbuhan klaster, serta riwayat kebakaran berulang. Bobot penilaian beradaptasi sesuai konteks musim kemarau dan ancaman asap lintas batas.
+   * **Perangkat (Tools)**: `score_hotspot_priority`, `rank_all_active_hotspots`, `explain_priority`, dan `overlay_risk_layers`.
 
-## 🚀 Key Features
+3. **Verification Agent (`verification_agent`)**
+   * **Peran**: Menjalankan kerangka keputusan nilai informasi (Value of Information) sebelum tim pemadam darat dikerahkan serta memvalidasi bukti kerusakan lahan.
+   * **Kapabilitas**: Menimbang biaya pengerahan tim terhadap risiko keterlambatan pemadaman gambut untuk memutuskan apakah suatu klaster memerlukan pengerahan langsung (`DIRECT_DISPATCH`), verifikasi drone intai, atau pengecekan oleh Masyarakat Peduli Api (MPA). Agen ini juga mengeksekusi model pemelajaran mendalam **DINOv3 BurnSeg** (hibrid Vision Transformer dan UNet spektral 11 kanal) serta **UNet 6 kanal** untuk menghasilkan poligon area terbakar, menghitung luasan dalam hektare pada proyeksi luas setara, dan menghitung indeks keparahan **dNBR** (Differenced Normalized Burn Ratio).
+   * **Perangkat (Tools)**: `segment_burned_area`, `compute_dnbr`, dan `compute_burned_area`.
 
-| Feature | Description |
-|---|---|
-| **Natural Language Command** | Multi-turn conversational interface accepting Indonesian commands (e.g. *"Analisis potensi kebakaran di Pulang Pisau 7 hari terakhir, prioritaskan lahan gambut"*). Formulates and executes multi-step investigation plans. |
-| **Hotspot Detection & Clustering** | Ingests near-real-time thermal anomaly data from **NASA FIRMS** (VIIRS / MODIS) and performs spatial clustering (DBSCAN / distance heuristics) to identify high-density ignition candidates. |
-| **Autonomous Satellite Retrieval** | Automatically queries and downloads pre- and post-fire **Landsat 8/9** and **Sentinel-2** surface reflectance bands via **Google Earth Engine (GEE)** with automatic cloud-mask evaluation and fallback date selection. |
-| **Burned Area Segmentation** | Employs a custom deep learning **U-Net (PyTorch)** model trained on Indonesian tropical forest/peatland datasets to produce high-resolution pixel-level burn scar segmentation masks. |
-| **Fire Severity Assessment (dNBR)** | Computes Differenced Normalized Burn Ratio to categorize burn severity based on standard USGS classifications. |
-| **Risk-Based Prioritization** | Scores and ranks investigation targets according to proximity to peatlands (*lahan gambut*), human settlements (*permukiman*), conservation forests, and current wind vectors. |
-| **Automated AI Briefings & Reports** | Generates exportable investigation dossiers and PDF field briefings (via WeasyPrint) containing spatial maps, calculated burned hectares, confidence scores, and audit trails. |
+4. **Routing and Dispatch Agent (`routing_dispatch`)**
+   * **Peran**: Menyelesaikan optimasi penugasan banyak tim ke banyak titik api (many to many global fleet optimization) agar total kerugian wilayah dapat ditekan seminimal mungkin.
+   * **Perangkat dan Logika**: Menghitung penempatan pos taktis pemadaman, estimasi waktu tempuh berdasarkan akses medan, serta mengidentifikasi ketersediaan sumber air terdekat seperti kanal gambut, sekat kanal, dan sungai untuk kebutuhan pompa bertekanan tinggi.
+   * **Perangkat (Tools)**: `optimize_team_assignments`, `estimate_travel_time`, `find_nearest_water_sources`, dan agen bantu pencarian kondisi akses jalan.
 
----
+5. **Coordination Agent (`coordination_agent`)**
+   * **Peran**: Menjembatani komunikasi operasional dua arah antara pusat komando dan regu pemadam di lapangan.
+   * **Kapabilitas**: Menyusun paket instruksi misi berbahasa Indonesia yang jelas, memantau pembaruan waktu tiba (ETA), menangani laporan hambatan akses di lapangan (seperti jembatan kayu putus atau perubahan angin), serta memicu eskalasi peringatan dini kepada pengawas manusia (Human in the Loop) apabila api mendekati batas aman permukiman.
+   * **Perangkat (Tools)**: `estimate_travel_time` dan `explain_priority`.
 
-## 🛠️ Tech Stack
+6. **Feedback and Learning Agent (`feedback_learning`)**
+   * **Peran**: Melakukan evaluasi pascainsiden setelah operasi pemadaman selesai dan diverifikasi petugas.
+   * **Kapabilitas**: Membandingkan prediksi awal model dan skor risiko terhadap temuan faktual di lapangan, mengevaluasi ketepatan estimasi luasan hektare terbakar, serta memberikan rekomendasi kalibrasi bobot risiko agar akurasi sistem meningkat secara berkelanjutan.
+   * **Perangkat (Tools)**: `score_hotspot_priority` dan `compute_burned_area`.
 
-### Frontend
-- **Framework:** [Next.js 15](https://nextjs.org/) (App Router, Server Components)
-- **Styling & UI:** Tailwind CSS, Lucide React
-- **Geospatial Visualization:** Leaflet / MapLibre GL, React-Leaflet
-- **State & Data Fetching:** React hooks
+## 3. Dependensi
 
-### Backend & Agent Orchestration
-- **API Framework:** [FastAPI](https://fastapi.tiangolo.com/) (Python 3.11+)
-- **Agent Framework:** [Google ADK](https://google.github.io/adk-docs/) (Agent Development Kit)
-- **LLM Engine:** [Gemini 3.5 Flash](https://ai.google.dev/) via Vertex AI (global endpoint)
-- **Data Validation & Settings:** Pydantic v2 & Pydantic-Settings
-- **Background Worker & Cache:** Redis 7
+Proyek SIGAP dibangun menggunakan arsitektur modern yang memisahkan antarmuka web geospasial, layanan API dan orkestrasi agen, serta modul pemelajaran mesin dan pemrosesan penginderaan jauh.
 
-### Machine Learning & Remote Sensing
-- **Deep Learning:** [PyTorch](https://pytorch.org/) & torchvision (U-Net architecture)
-- **Remote Sensing Data API:** Google Earth Engine (`earthengine-api`), NASA FIRMS API
-- **Geospatial Processing:** Rasterio, GeoPandas, Shapely, NumPy, Pillow, Scikit-learn
-- **Reporting Engine:** WeasyPrint (HTML to PDF compilation)
+### Persyaratan Sistem Utama
+* **Python**: Versi 3.11 atau lebih baru
+* **Node.js**: Versi 20.x atau lebih baru beserta pengelola paket `npm`
+* **Docker dan Docker Compose**: Untuk menjalankan seluruh layanan dalam kontainer terisolasi
+* **Kredensial Layanan Eksternal**:
+  * Proyek **Google Cloud Platform (GCP)** dengan Vertex AI API aktif dan Application Default Credentials (atau berkas JSON Service Account)
+  * Akun **Google Earth Engine (GEE)** yang terdaftar pada proyek GCP
+  * Kunci API **NASA FIRMS** (`NASA_FIRMS_API_KEY`) untuk pengambilan data titik panas VIIRS dan MODIS
 
----
+### Dependensi Backend, Agen AI, dan Pemelajaran Mesin (Python)
+Seluruh pustaka Python didefinisikan di dalam berkas `pyproject.toml` dan `backend/requirements.txt`:
+* **Kerangka Kerja API dan Server**: `fastapi` (>=0.115.0), `uvicorn` (>=0.30.0), `pydantic` (>=2.8.0), `pydantic_settings` (>=2.4.0), `python_dotenv` (>=1.0.1)
+* **Orkestrasi Multi Agen dan LLM**: `google_adk` (>=1.0.0), `google_genai` (>=1.0.0), `google_auth` (>=2.29.0)
+* **Pemelajaran Mendalam dan Visi Komputer**: `torch` (>=2.2.0), `torchvision` (>=0.17.0), `scikit_learn` (>=1.4.0), `numpy` (>=1.26.0, <2.0.0), `Pillow` (>=10.2.0)
+* **Penginderaan Jauh dan Geospasial**: `earthengine_api` (>=0.1.400), `rasterio` (>=1.3.10), `geopandas` (>=1.0.0), `shapely` (>=2.0.0)
+* **Jaringan, Penyimpanan Sementara, dan Pelaporan**: `httpx` (>=0.27.0), `requests` (>=2.31.0), `redis` (>=5.0.0), `weasyprint` (>=62.0)
+* **Pengujian dan Kualitas Kode**: `pytest` (>=8.3.0), `pytest_asyncio` (>=0.24.0), `ruff` (>=0.6.0), `mypy` (>=1.11.0)
 
-## 📂 Repository Structure
+### Dependensi Frontend (Node.js dan TypeScript)
+Seluruh pustaka antarmuka pengguna didefinisikan di dalam berkas `frontend/package.json`:
+* **Kerangka Kerja Web**: `next` (15.1.7) dengan App Router, `react` (19.0.0), `react_dom` (19.0.0), `typescript` (5.7.3)
+* **Visualisasi Peta Geospasial**: `leaflet` (1.9.4), `react_leaflet` (5.0.0)
+* **Antarmuka dan Gaya Visual**: `tailwindcss` (4.0.0), `lucide_react` (0.475.0), `clsx` (2.1.1), `tailwind_merge` (2.6.0), `postcss` (8.5.1), `autoprefixer` (10.4.20)
 
-```text
-SIGAP/
-├── agent/                          # Google ADK multi-agent system
-│   ├── agent.py                    # Agent definitions (6 sub-agents + orchestrator)
-│   ├── config.py                   # Agent configuration constants
-│   ├── tools/                      # ADK tool wrappers
-│   │   ├── firms_tool.py           # FIRMS data retrieval
-│   │   ├── earth_engine_tool.py    # GEE imagery tools
-│   │   ├── unet_tool.py            # U-Net inference
-│   │   ├── geospatial_tool.py      # dNBR, area, overlay
-│   │   ├── priority_tool.py        # Risk scoring
-│   │   └── dispatch_tool.py        # Route optimization
-│   └── prompts/                    # Per-agent instruction templates
-├── backend/                        # FastAPI REST API
-│   ├── main.py                     # Application entrypoint
-│   ├── config.py                   # Settings (pydantic-settings)
-│   ├── api/routes/                 # Route handlers
-│   ├── models/                     # Pydantic schemas
-│   └── services/                   # Business logic
-├── frontend/                       # Next.js 15 web application
-│   ├── src/app/                    # App Router (5 pages)
-│   ├── src/components/             # UI, chat, map, dashboard
-│   ├── src/hooks/                  # Custom React hooks
-│   └── src/lib/                    # API client, types, utils
-├── ml/                             # PyTorch U-Net pipeline
-│   └── unet/                       # Model, train, predict, pre/post-processing
-├── data/                           # Data integration clients
-│   ├── firms/                      # NASA FIRMS API client
-│   ├── earth_engine/               # Google Earth Engine client
-│   └── geospatial/                 # dNBR, clustering, priority scoring
-├── tests/                          # Test suite
-├── docs/                           # Architecture documentation
-├── scripts/                        # Setup & utility scripts
-├── agents.md                       # Agent architecture documentation
-├── pyproject.toml                  # Python dependencies & tooling
-├── docker-compose.yml              # Local dev stack
-└── .env.example                    # Environment variable template
-```
+## 4. Cara Menjalankan
 
----
+Anda dapat menjalankan proyek SIGAP menggunakan Docker Compose (direkomendasikan untuk kemudahan integrasi) maupun secara langsung pada lingkungan lokal untuk pengembangan.
 
-## ⚙️ Getting Started
+### Tahap 1: Konfigurasi Variabel Lingkungan
 
-### Prerequisites
-
-Make sure the following tools and accounts are available on your system:
-- **Python:** 3.11 or higher
-- **Node.js:** 20.x or higher (with `npm` or `pnpm`)
-- **Docker & Docker Compose:** Latest stable release
-- **Google Cloud Project:** With Vertex AI API enabled and Application Default Credentials configured.
-- **Google Earth Engine Account:** Registered Google Cloud Project with Earth Engine API enabled and Service Account JSON key.
-- **NASA FIRMS MAP Key:** Free API key obtained from [NASA FIRMS API Key](https://firms.modaps.eosdis.nasa.gov/api/map_key/).
-
----
-
-### Step 1: Clone & Configure Environment
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-org/sigap.git
-   cd sigap
-   ```
-
-2. Copy the environment configuration template:
+1. Masuk ke direktori utama proyek `SIGAP`.
+2. Salin berkas templat konfigurasi `.env.example` menjadi berkas `.env`:
    ```bash
    cp .env.example .env
    ```
-
-3. Edit `.env` and provide your credentials:
+3. Buka berkas `.env` dan isi variabel konfigurasi sesuai kredensial Anda:
    ```env
-   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-   GOOGLE_APPLICATION_CREDENTIALS=/path/to/gee-service-account.json
-   EARTH_ENGINE_PROJECT=your-gcp-project-id
-   NASA_FIRMS_API_KEY=your-firms-api-key
-   DATABASE_URL=postgresql://sigap:sigap_password@localhost:5432/sigap_db
+   GOOGLE_CLOUD_PROJECT=id_proyek_gcp_anda
+   GOOGLE_APPLICATION_CREDENTIALS=/jalur/menuju/kredensial_gcp.json
+   VERTEX_LOCATION=us_west1
+   EARTH_ENGINE_PROJECT=id_proyek_gcp_anda
+   NASA_FIRMS_API_KEY=kunci_api_firms_anda
    REDIS_URL=redis://localhost:6379/0
    NEXT_PUBLIC_API_URL=http://localhost:8000
    ```
+   > Catatan: Apabila kunci API eksternal belum diatur, sistem memiliki mekanisme cadangan (fallback) pada pusat pemantauan agar antarmuka dan simulasi alur investigasi tetap dapat diuji.
 
----
+### Tahap 2: Opsi A, Menjalankan dengan Docker Compose (Direkomendasikan)
 
-### Step 2: Option A — Run via Docker Compose (Recommended)
-
-Start the entire stack (FastAPI backend, Next.js frontend, Redis) with a single command:
+Jalankan perintah berikut dari direktori `SIGAP` untuk membangun dan menyalakan layanan Redis, FastAPI Backend, serta Next.js Frontend secara bersamaan:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
-- **Frontend:** [http://localhost:3000](http://localhost:3000)
-- **Backend API Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Redis:** `localhost:6379`
+Setelah seluruh kontainer aktif, akses layanan melalui peramban web:
+* **Aplikasi Web Frontend**: `http://localhost:3000`
+* **Dokumentasi Interaktif API Backend (Swagger UI)**: `http://localhost:8000/docs`
+* **Pemeriksaan Status Layanan (Health Check)**: `http://localhost:8000/health`
 
----
+### Tahap 3: Opsi B, Menjalankan Secara Lokal untuk Pengembangan
 
-### Step 3: Option B — Run Locally for Development
-
-#### 1. Backend Setup
+#### 1. Menjalankan Layanan Backend dan Agen AI
+Dari direktori `SIGAP`, buat lingkungan virtual Python, pasang dependensi, dan jalankan server FastAPI:
 
 ```bash
-# Navigate to backend directory
-cd backend
+virtualenv .venv
+```
 
-# Create and activate virtual environment
-python -m venv .venv
-
-# On Linux/macOS:
-source .venv/bin/activate
-# On Windows (PowerShell):
+Aktifkan lingkungan virtual pada Windows PowerShell:
+```powershell
 .venv\Scripts\Activate.ps1
-
-# Upgrade pip and install dependencies
-pip install --upgrade pip
-pip install -e ".[dev]"  # or: pip install -r requirements.txt
-
-# Run FastAPI development server
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### 2. Frontend Setup
+Atau aktifkan pada Linux dan macOS:
+```bash
+source .venv/bin/activate
+```
+
+Pasang seluruh paket dependensi Python dan jalankan server:
+```bash
+pip install .
+uvicorn backend.main:app
+```
+
+Server API akan berjalan di `http://localhost:8000`.
+
+#### 2. Menjalankan Aplikasi Web Frontend
+Buka terminal baru, masuk ke direktori `frontend`, pasang dependensi Node.js, dan jalankan server pengembangan Next.js:
 
 ```bash
-# Open a new terminal and navigate to frontend directory
 cd frontend
-
-# Install Node dependencies
 npm install
-
-# Run Next.js development server
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to open the interactive dashboard.
+Buka `http://localhost:3000` pada peramban untuk menggunakan dasbor pemantauan, peta analisis kebakaran, ruang kerja investigasi AI, penilaian prioritas, dan unduhan laporan.
 
----
+### Tahap 4: Menjalankan Pengujian Otomatis
 
-## 🧪 Testing & Code Quality
-
-Run tests and linters for the backend:
+Untuk memverifikasi fungsionalitas agen, peralatan geospasial, model pemelajaran mesin, dan rute API, jalankan perintah berikut dari direktori `SIGAP`:
 
 ```bash
-# Run unit and integration tests
 pytest
-
-# Run Ruff linter and formatter checks
-ruff check .
-ruff format --check .
-
-# Run static type checking
-mypy app
 ```
 
----
+## 5. Struktur Direktori Proyek
 
-## 📄 License
+* `agent/`: Definisi sistem multi agen Google ADK (`agent.py`), konfigurasi model, templat instruksi tiap agen (`prompts/`), dan pembungkus peralatan domain (`tools/`).
+* `backend/`: Aplikasi REST API dan SSE streaming menggunakan FastAPI (`main.py`), rute endpoint (`api/routes/`), skema data Pydantic (`models/`), serta layanan orkestrasi investigasi (`services/`).
+* `frontend/`: Aplikasi web interaktif Next.js 15 (`src/app/`), komponen peta dan percakapan agen (`src/components/`), pengait logika klien (`src/hooks/`), serta pustaka pemodelan taktis (`src/lib/`).
+* `ml/`: Pipeline pemelajaran mendalam PyTorch yang mencakup arsitektur dan inferensi **DINOv3 BurnSeg** (`ml/dinov3/`) serta **UNet 6 kanal** (`ml/unet/`) beserta bobot model terlatih.
+* `data/`: Klien integrasi data eksternal untuk NASA FIRMS (`data/firms/`), Google Earth Engine dan STAC (`data/earth_engine/`), serta algoritma klasterisasi DBSCAN, perhitungan dNBR, dan skoring prioritas (`data/geospatial/`).
+* `docs/`: Dokumentasi arsitektur sistem tingkat tinggi.
+* `tests/`: Rangkaian pengujian unit dan integrasi untuk agen, API, peralatan, dan model ML.
 
-This project is licensed under the [MIT License](LICENSE).
+## 6. Kontribusi Anggota
+
+Pengembangan platform SIGAP dilaksanakan melalui kolaborasi tim lintas disiplin dengan pembagian peran dan kontribusi sebagai berikut:
+
+* **Natanael I Manurung (Hacker)**
+  Membangun keseluruhan tumpukan teknologi (full stack) aplikasi, meliputi pengembangan antarmuka web Next.js, arsitektur layanan backend FastAPI, integrasi jaringan data geospasial dan peta interaktif, penyambungan pipeline model ke dalam aplikasi, serta konfigurasi kontainer dan infrastruktur sistem.
+
+* **Kurt Mikhael Purba (Hacker)**
+  Mengembangkan sistem kecerdasan buatan (AI), perancangan arsitektur dan instruksi multi agen, eksperimen pemelajaran mesin, serta pelatihan dan penyesuaian model (model tuning) segmentasi area terbakar DINOv3 BurnSeg dan UNet.
+
+* **Aurelia Jennifer Gunawan (Hipster)**
+  Merancang desain antarmuka dan pengalaman pengguna (UI/UX) secara menyeluruh pada Figma, menyusun sistem desain visual dasbor operasional, serta berkontribusi dalam pembuatan materi presentasi (pitch deck).
+
+* **Hakam Avicena Mustain (Hustler)**
+  Menyusun analisis permasalahan operasional, perumusan nilai solusi dan strategi implementasi, pembuatan materi presentasi (pitch deck), serta produksi video demonstrasi produk.
+
+* **Nathan Edward Christofer Marpaung (Hustler)**
+  Menyusun narasi produk, pembuatan materi presentasi (pitch deck), serta pengambilan gambar dan penyuntingan video demonstrasi produk.
+
+## 7. Lisensi
+
+Proyek ini didistribusikan di bawah Lisensi MIT sebagaimana tercantum pada konfigurasi proyek.
