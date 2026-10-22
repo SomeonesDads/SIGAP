@@ -1,10 +1,10 @@
 """Agent configuration constants for SIGAP multi-agent system."""
 
 # Default model for all agents
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 # Vertex AI location for model serving
-VERTEX_AI_LOCATION = "global"
+VERTEX_AI_LOCATION = "us-central1"
 
 # Agent names
 AGENT_NAMES = {
