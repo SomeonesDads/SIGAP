@@ -32,6 +32,7 @@ services:
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - PYTHONPATH=/app
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/backend/adc_credentials.json
     volumes:
       - ./backend:/app/backend
       - ./agent:/app/agent

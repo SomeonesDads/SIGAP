@@ -83,14 +83,72 @@ function droneIcon(drone: Drone, active: boolean): L.DivIcon {
   });
 }
 
-function tacticalBadgeIcon(pt: TacticalDeploymentPoint): L.DivIcon {
+function tacticalBadgeIcon(
+  pt: TacticalDeploymentPoint,
+  showExpandedPopup: boolean,
+  mapZoom: number
+): L.DivIcon {
   const isBase = pt.code === "BASE";
-  const width = isBase ? 52 : 46;
+  if (!showExpandedPopup) {
+    const width = isBase ? 52 : 46;
+    return L.divIcon({
+      className: "sigap-tactical-marker",
+      iconSize: [width, 22],
+      iconAnchor: [width / 2, 11],
+      html: `<div style="padding:2px 6px;border-radius:6px;background:${pt.badgeColor};border:1.5px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);color:#ffffff;font:700 9.5px var(--font-jetbrains-mono),monospace;text-align:center;white-space:nowrap;cursor:pointer">${pt.code}</div>`,
+    });
+  }
+
+  const showFullRationale = mapZoom >= 10;
+  const cardWidth = showFullRationale ? 215 : 185;
   return L.divIcon({
-    className: "sigap-tactical-marker",
-    iconSize: [width, 22],
-    iconAnchor: [width / 2, 11],
-    html: `<div style="padding:2px 6px;border-radius:6px;background:${pt.badgeColor};border:1.5px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);color:#ffffff;font:700 9.5px var(--font-jetbrains-mono),monospace;text-align:center;white-space:nowrap;cursor:pointer">${pt.code}</div>`,
+    className: "sigap-tactical-auto-popup",
+    iconSize: [cardWidth, 1],
+    iconAnchor: [cardWidth / 2, 14],
+    html: `
+      <div style="width:${cardWidth}px;background:rgba(255,255,255,0.96);backdrop-filter:blur(6px);border:1.5px solid ${pt.badgeColor};border-radius:8px;box-shadow:0 4px 14px rgba(15,23,42,0.28);padding:5px 7px;color:#0f172a;font-family:system-ui,-apple-system,sans-serif;font-size:10px;line-height:1.28;cursor:pointer;pointer-events:auto">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-bottom:3px">
+          <span style="padding:1px 5px;border-radius:4px;background:${pt.badgeColor};color:#fff;font:700 9px var(--font-jetbrains-mono),monospace">${pt.code}</span>
+          <span style="font:600 9px var(--font-jetbrains-mono),monospace;color:#475569">${pt.lat.toFixed(3)}°, ${pt.lon.toFixed(3)}°</span>
+        </div>
+        <div style="font-weight:700;color:#0f172a;font-size:10.5px;margin-bottom:2px">${pt.name}</div>
+        <div style="color:#1e293b;margin-bottom:2px"><b style="color:#334155">Unit:</b> ${pt.assignedUnit}</div>
+        <div style="color:#334155;font-size:9.5px;margin-bottom:${showFullRationale ? "3px" : "0"}"><b>Alat:</b> ${pt.equipment}</div>
+        ${
+          showFullRationale
+            ? `<div style="background:#f1f5f9;border-left:2px solid ${pt.badgeColor};padding:2px 4px;border-radius:3px;color:#475569;font-size:9px">${pt.rationale}</div>`
+            : ""
+        }
+      </div>
+    `,
+  });
+}
+
+function zoneAutoPopupIcon(
+  tierLabel: string,
+  badgeText: string,
+  strokeColor: string,
+  bgAccent: string,
+  metricsLine1: string,
+  metricsLine2: string,
+  metricsLine3?: string
+): L.DivIcon {
+  const cardWidth = 196;
+  return L.divIcon({
+    className: "sigap-zone-auto-popup",
+    iconSize: [cardWidth, 1],
+    iconAnchor: [cardWidth / 2, 12],
+    html: `
+      <div style="width:${cardWidth}px;background:rgba(15,23,42,0.92);backdrop-filter:blur(6px);border:1.5px solid ${strokeColor};border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.35);padding:5px 7px;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;font-size:9.5px;line-height:1.3;pointer-events:auto">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+          <span style="padding:1px 5px;border-radius:4px;background:${bgAccent};color:#fff;font:700 8.5px var(--font-jetbrains-mono),monospace">${badgeText}</span>
+          <span style="font-weight:700;color:#fff;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tierLabel}</span>
+        </div>
+        <div style="color:#e2e8f0">${metricsLine1}</div>
+        <div style="color:#cbd5e1">${metricsLine2}</div>
+        ${metricsLine3 ? `<div style="margin-top:2px;padding-top:2px;border-top:1px solid rgba(255,255,255,0.15);color:#fde047;font-weight:600">${metricsLine3}</div>` : ""}
+      </div>
+    `,
   });
 }
 
@@ -141,17 +199,19 @@ function SelectedCard({
 function MapBridge({
   onReady,
   onBackgroundClick,
-  onZoomChange,
+  onViewChange,
   onPopupChange,
 }: {
   onReady: (map: L.Map) => void;
   onBackgroundClick: () => void;
-  onZoomChange: (zoom: number) => void;
+  onViewChange: (zoom: number, center: [number, number]) => void;
   onPopupChange: (open: boolean) => void;
 }) {
   const map = useMap();
   useEffect(() => {
     onReady(map);
+    const c = map.getCenter();
+    onViewChange(map.getZoom(), [c.lat, c.lng]);
     const container = map.getContainer();
     if (!container || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(() => {
@@ -159,11 +219,18 @@ function MapBridge({
     });
     ro.observe(container);
     return () => ro.disconnect();
-  }, [map, onReady]);
+  }, [map, onReady, onViewChange]);
 
   useMapEvents({
     click: onBackgroundClick,
-    zoomend: () => onZoomChange(map.getZoom()),
+    zoomend: () => {
+      const c = map.getCenter();
+      onViewChange(map.getZoom(), [c.lat, c.lng]);
+    },
+    moveend: () => {
+      const c = map.getCenter();
+      onViewChange(map.getZoom(), [c.lat, c.lng]);
+    },
     popupopen: () => onPopupChange(true),
     popupclose: () => onPopupChange(false),
   });
@@ -185,6 +252,7 @@ export interface FireMapProps {
   rawHotspots?: RawHotspotPoint[];
   segmentation?: SegmentationResponse | null;
   spatialContext?: SpatialContextResponse | null;
+  autoPopupsOnZoom?: boolean;
 }
 
 export default function FireMap({
@@ -202,9 +270,19 @@ export default function FireMap({
   rawHotspots = [],
   segmentation = null,
   spatialContext = null,
+  autoPopupsOnZoom = true,
 }: FireMapProps) {
   const [mapZoom, setMapZoom] = useState(5);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([-2.2, 118.0]);
   const [hasOpenPopup, setHasOpenPopup] = useState(false);
+
+  const handleViewChange = useMemo(
+    () => (zoom: number, center: [number, number]) => {
+      setMapZoom(zoom);
+      setMapCenter(center);
+    },
+    []
+  );
 
   const rawHotspotItems = useMemo(() => {
     const seenIds = new Set<string>();
@@ -220,13 +298,32 @@ export default function FireMap({
       });
   }, [rawHotspots, hotspots]);
 
-  const selected = useMemo(
+  const explicitSelected = useMemo(
     () =>
       hotspots.find((h) => h.id === selectedId) ??
       rawHotspotItems.find((h) => h.id === selectedId) ??
       null,
     [hotspots, rawHotspotItems, selectedId]
   );
+
+  // When zoomed in (zoom >= 8), automatically focus the closest cluster near the viewport center
+  // so all zone popups and tactical sector cards open immediately with zero clicks required!
+  const selected = useMemo(() => {
+    if (explicitSelected) return explicitSelected;
+    if (!autoPopupsOnZoom || mapZoom < 8 || hotspots.length === 0) return null;
+    let best: Hotspot | null = null;
+    let bestDist = Infinity;
+    for (const h of hotspots) {
+      const d = Math.hypot(h.lat - mapCenter[0], h.lon - mapCenter[1]);
+      if (d < bestDist) {
+        bestDist = d;
+        best = h;
+      }
+    }
+    return bestDist <= 3.5 ? best : hotspots[0];
+  }, [explicitSelected, autoPopupsOnZoom, mapZoom, hotspots, mapCenter]);
+
+  const showAllZonePopups = Boolean(autoPopupsOnZoom && mapZoom >= 8 && selected);
 
   const hotspotsWithZones = useMemo(
     () =>
@@ -306,7 +403,7 @@ export default function FireMap({
       <MapBridge
         onReady={onReady}
         onBackgroundClick={() => onSelect(null)}
-        onZoomChange={setMapZoom}
+        onViewChange={handleViewChange}
         onPopupChange={setHasOpenPopup}
       />
 
@@ -368,6 +465,7 @@ export default function FireMap({
       {(showSegmentation || showDnbr) &&
         hotspotsWithZones.map((h) => {
           const rings = buildDinov3CoverageRings(h, mapZoom);
+          const isFocused = h.id === selected?.id;
           return (
             <Fragment key={`${h.id}-dinov3`}>
               {rings.map((ring) => {
@@ -380,9 +478,9 @@ export default function FireMap({
                     positions={ring.positions}
                     pathOptions={{
                       color: ring.strokeColor,
-                      weight: h.id === selectedId ? ring.weight + 0.8 : ring.weight,
+                      weight: isFocused ? ring.weight + 0.8 : ring.weight,
                       fillColor: ring.fillColor,
-                      fillOpacity: h.id === selectedId ? Math.min(0.88, ring.fillOpacity + 0.12) : ring.fillOpacity,
+                      fillOpacity: isFocused ? Math.min(0.88, ring.fillOpacity + 0.12) : ring.fillOpacity,
                       dashArray: ring.dashArray,
                     }}
                     eventHandlers={{
@@ -547,19 +645,99 @@ export default function FireMap({
           <Marker
             key={h.id}
             position={[h.lat, h.lon]}
-            icon={fireIcon(h, h.id === selectedId)}
-            zIndexOffset={h.id === selectedId ? 500 : 0}
+            icon={fireIcon(h, h.id === selected?.id)}
+            zIndexOffset={h.id === selected?.id ? 500 : 0}
             title={`${h.id} — ${SEVERITY_META[h.severity].label}`}
             eventHandlers={{ click: () => onSelect(h) }}
           />
         ))}
 
-      {/* 8. Tactical Perimeter Resource Allocation & Fleet Dispatch Routings for Selected Cluster */}
+      {/* 8. Tactical Perimeter Resource Allocation, Fleet Dispatch Routings & Simultaneous Zone Auto-Popups */}
       {selected &&
         (() => {
           const plan = buildTacticalAllocationPlan(selected, mapZoom);
+          const rings = buildDinov3CoverageRings(selected, mapZoom);
+          const baseAreaHa = Math.max(12, selected.areaHa ?? 120);
+          const isPeat =
+            Boolean(selected.peatland) || (selected.soil ?? "").toLowerCase().includes("gambut");
+          const projected24hHa = Math.round(baseAreaHa * (isPeat ? 1.85 : 2.15));
+          const lossPerHaJuta = isPeat ? 59.5 : 31.5;
+          const totalLoss24hMiliar = ((projected24hHa * lossPerHaJuta) / 1000).toFixed(2);
+          const co2Tons24h = Math.round(projected24hHa * (isPeat ? 520 : 145)).toLocaleString("id-ID");
+
+          const zoneCallouts = showAllZonePopups
+            ? rings.map((ring) => {
+                if (ring.tier === "CORE_DEEPRED") {
+                  return {
+                    key: "zone-core",
+                    pos: ring.positions[15] ?? ring.positions[0],
+                    icon: zoneAutoPopupIcon(
+                      "Merah Tua (Inti Bara)",
+                      "ZONA 1 • INTI",
+                      ring.strokeColor,
+                      "#991b1b",
+                      `Luas Inti: <b>${(baseAreaHa * 0.24).toFixed(1)} Ha</b> • Rad: ${ring.majorAxisKm}×${ring.minorAxisKm} km`,
+                      `FRP: <b>${selected.totalFrp ?? 420} MW</b> • dNBR: <b>${selected.dnbrMean.toFixed(2)}</b>`,
+                      "🚁 Output: Drop Udara UDP-1 (0 Regu Darat)"
+                    ),
+                  };
+                }
+                if (ring.tier === "INNER_ORANGE") {
+                  return {
+                    key: "zone-inner",
+                    pos: ring.positions[9] ?? ring.positions[0],
+                    icon: zoneAutoPopupIcon(
+                      "Merah-Oranye (Api Aktif)",
+                      "ZONA 2 • AKTIF",
+                      ring.strokeColor,
+                      "#dc2626",
+                      `Luas Aktif: <b>${(baseAreaHa * 0.31).toFixed(1)} Ha</b> • Rad: ${ring.majorAxisKm}×${ring.minorAxisKm} km`,
+                      `Flammability: <b>${ring.flammabilityIndex}</b> (${ring.flammabilityLabel})`,
+                      "🚒 Output: Serang Sayap Kiri/Kanan (POS-2 & POS-3)"
+                    ),
+                  };
+                }
+                if (ring.tier === "MID_AMBER") {
+                  return {
+                    key: "zone-mid",
+                    pos: ring.positions[21] ?? ring.positions[0],
+                    icon: zoneAutoPopupIcon(
+                      "Oranye-Kuning (Front Api)",
+                      "ZONA 3 • TRANSISI",
+                      ring.strokeColor,
+                      "#d97706",
+                      `Luas Transisi: <b>${(baseAreaHa * 0.25).toFixed(1)} Ha</b> • Rad: ${ring.majorAxisKm}×${ring.minorAxisKm} km`,
+                      `Angin: <b>${ring.windSpeedKmh} km/j</b> → ${ring.windDirectionLabel}`,
+                      "🛡️ Output: Penjepitan Flanking & Sekat Kanal"
+                    ),
+                  };
+                }
+                return {
+                  key: "zone-outer",
+                  pos: ring.positions[3] ?? ring.positions[0],
+                  icon: zoneAutoPopupIcon(
+                    "Kuning (Sebaran & Risiko 24j)",
+                    "ZONA 4 • BUFFER",
+                    ring.strokeColor,
+                    "#ca8a04",
+                    `Area: <b>${baseAreaHa} Ha</b> → Proyeksi 24j: <b>${projected24hHa} Ha</b>`,
+                    `Permukiman: <b>${selected.settlementKm} km</b> • Sekat Bakar POS-4`,
+                    `💸 Risiko 24j: Rp ${totalLoss24hMiliar} Miliar • ${co2Tons24h} tCO₂e`
+                  ),
+                };
+              })
+            : [];
+
           return (
             <Fragment key={`tactical-${selected.id}`}>
+              {zoneCallouts.map((zc) => (
+                <Marker
+                  key={`zone-auto-${selected.id}-${zc.key}`}
+                  position={zc.pos}
+                  icon={zc.icon}
+                  zIndexOffset={1250}
+                />
+              ))}
               {plan.routes.map((rt) => (
                 <Fragment key={rt.id}>
                   {/* White halo casing so route stands out clearly over satellite/terrain basemaps */}
@@ -629,7 +807,7 @@ export default function FireMap({
                 <Marker
                   key={`tac-pt-${pt.code}`}
                   position={[pt.lat, pt.lon]}
-                  icon={tacticalBadgeIcon(pt)}
+                  icon={tacticalBadgeIcon(pt, showAllZonePopups, mapZoom)}
                   zIndexOffset={1400}
                   title={`${pt.code} — ${pt.name}`}
                 >

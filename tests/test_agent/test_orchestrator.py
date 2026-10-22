@@ -42,7 +42,7 @@ def test_agent_initialization(mock_settings: Dict[str, Any]) -> None:
 
 
 def test_adk_agents_tool_bindings() -> None:
-    """Verify that custom tool wrappers from agent/tools/ are bound to the 6 ADK sub-agents."""
+    """Verify that all 14 custom tool wrappers from agent/tools/ are bound to the 6 ADK sub-agents and connected to backend."""
     import ast
     from pathlib import Path
 
@@ -51,6 +51,7 @@ def test_adk_agents_tool_bindings() -> None:
         compute_burned_area,
         compute_dnbr,
         estimate_travel_time,
+        evaluate_fire_impact_loss,
         explain_priority,
         fetch_hotspots,
         fetch_satellite_imagery,
@@ -73,10 +74,12 @@ def test_adk_agents_tool_bindings() -> None:
         score_hotspot_priority,
         rank_all_active_hotspots,
         explain_priority,
+        evaluate_fire_impact_loss,
         optimize_team_assignments,
         estimate_travel_time,
         find_nearest_water_sources,
     ]
+    assert len(custom_tools) == 14
     for tool_fn in custom_tools:
         assert callable(tool_fn)
         assert getattr(tool_fn, "__is_agent_tool__", False) is True
@@ -86,11 +89,17 @@ def test_adk_agents_tool_bindings() -> None:
 
     expected_agent_tools = {
         "perception_fusion": {"fetch_hotspots", "fetch_satellite_imagery", "assess_image_quality"},
-        "risk_scoring": {"score_hotspot_priority", "rank_all_active_hotspots", "explain_priority", "overlay_risk_layers"},
+        "risk_scoring": {
+            "score_hotspot_priority",
+            "rank_all_active_hotspots",
+            "explain_priority",
+            "overlay_risk_layers",
+            "evaluate_fire_impact_loss",
+        },
         "verification_agent": {"segment_burned_area", "compute_dnbr", "compute_burned_area"},
         "routing_dispatch": {"optimize_team_assignments", "estimate_travel_time", "find_nearest_water_sources"},
         "coordination_agent": {"estimate_travel_time", "explain_priority"},
-        "feedback_learning": {"score_hotspot_priority", "compute_burned_area"},
+        "feedback_learning": {"score_hotspot_priority", "compute_burned_area", "evaluate_fire_impact_loss"},
     }
 
     found_agents = {}
@@ -110,6 +119,15 @@ def test_adk_agents_tool_bindings() -> None:
         assert required_tools.issubset(found_agents[agent_name]), (
             f"{agent_name} missing tools: {required_tools - found_agents[agent_name]}"
         )
+
+    # Verify that backend/api/routes/chat.py is connected to agent.agent (root_agent & run_adk_orchestrator_chat)
+    from agent.agent import root_agent, run_adk_orchestrator_chat
+    from backend.api.routes import chat as chat_route
+
+    assert chat_route.root_agent is root_agent
+    assert chat_route.run_adk_orchestrator_chat is run_adk_orchestrator_chat
+    assert len(root_agent.sub_agents) == 6
+
 
 
 def test_domain_guardrail() -> None:
