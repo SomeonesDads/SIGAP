@@ -367,15 +367,22 @@ def _resolve_session_region(session_id: str, message: str) -> str:
     """Resolve target region from current message, or inherit from prior turn in the session if unspecified."""
     extracted = extract_region_from_query(message)
     q_lower = (message or "").lower()
-    explicitly_national = "indonesia" in q_lower or "nasional" in q_lower
+    explicitly_national = any(
+        kw in q_lower
+        for kw in ("indonesia", "indo", "nasional", "provinsi", "paling banyak", "terbanyak", "terbesar", "mana saja")
+    )
 
     ctx = _SESSION_CONTEXT.setdefault(session_id, {"last_region": "Indonesia", "history": []})
     default_ctx = _SESSION_CONTEXT.setdefault("default", {"last_region": "Indonesia", "history": []})
 
-    if extracted != "Indonesia" or explicitly_national:
+    if extracted != "Indonesia":
         ctx["last_region"] = extracted
         default_ctx["last_region"] = extracted
         return extracted
+    if explicitly_national:
+        ctx["last_region"] = "Indonesia"
+        default_ctx["last_region"] = "Indonesia"
+        return "Indonesia"
 
     # Inherit previous region if this is a follow-up question without a new location
     saved = ctx.get("last_region") or default_ctx.get("last_region") or "Indonesia"
@@ -747,13 +754,39 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         kw in q_lower
         for kw in ("kerugian", "rugi", "biaya", "dampak", "dibiarkan", "biarkan", "ekonomi", "emisi", "karbon", "bahaya")
     )
+    is_ranking_query = any(
+        kw in q_lower
+        for kw in ("paling banyak", "terbanyak", "terbesar", "tertinggi", "terparah", "5 provinsi", "lima provinsi", "provinsi mana", "daerah mana", "wilayah mana", "daftar", "top", "urutan", "ranking", "berapa")
+    )
     loc_header = (
         f"{top_loc} ({top_dist})"
         if top_loc.strip().lower() == target_region.strip().lower()
         else f"{top_loc}, {target_region}"
     )
 
-    if is_loss_query:
+    if is_ranking_query:
+        ranking_lines: list[str] = []
+        for idx, h in enumerate(hotspots[:5], start=1):
+            h_loc = h.get("location", "Wilayah Pantauan")
+            h_dist = h.get("district", "Indonesia")
+            h_cnt = h.get("hotspotCount", 1)
+            h_frp = h.get("totalFrp", 10.0)
+            h_area = h.get("areaHa", 25)
+            h_score = h.get("riskScore", 75.0)
+            h_soil = h.get("soil", "Gambut/Mineral")
+            ranking_lines.append(
+                f"{idx}. **{h_dist} — {h_loc}**\n"
+                f"   * **Intensitas & Luas:** **{h_cnt} titik panas aktif** • Total FRP **{h_frp} MW** • Estimasi area terbakar **~{h_area} Ha**\n"
+                f"   * **Skor Risiko MCDA:** **{h_score}/100** • Karakteristik lahan: **{h_soil}** (Jarak ke permukiman: **{h.get('settlementKm', 2.0)} km**)"
+            )
+        joined_ranking = "\n".join(ranking_lines)
+        fallback_reply = (
+            f"### 🔥 5 Wilayah / Provinsi dengan Kasus Kebakaran Tertinggi — {target_region} ({live_badge})\n\n"
+            f"Berdasarkan pemindaian satelit **NASA FIRMS (VIIRS S-NPP & NOAA-20 NRT)** yang mendeteksi total **{total_raw} titik panas aktif** dalam **{cluster_count} klaster spasial DBSCAN**, berikut adalah **5 wilayah dengan konsentrasi kebakaran dan skor risiko tertinggi** saat ini:\n\n"
+            f"{joined_ranking}\n\n"
+            f"**Ringkasan Prioritas Utama:** Fokus intervensi tertinggi berada di **{top_loc} ({top_dist})** dengan skor risiko **{top_score}/100** dan luas area terbakar **{total_ha} Ha**."
+        )
+    elif is_loss_query:
         fallback_reply = (
             f"### 📉 Estimasi Kerugian Ekonomi & Ekologis Jika Api Dibiarkan — {loc_header} ({live_badge})\n\n"
             f"Jika klaster kebakaran aktif di **{loc_header}** (`{c_lat:.4f}°, {c_lon:.4f}°`) dengan luas saat ini **{total_ha} Ha** (Inti Merah **{red_ha} Ha**, FRP **{top_frp} MW**, kepercayaan lintas-satelit **{top_sensor_conf}%**) dibiarkan tanpa intervensi pemadaman, kecepatan angin **{top_wind_kmh} km/j** menuju **{top_wind_label}** pada bahan bakar **{top_soil}** (flamabilitas **{top_flam_pct}%**) akan memicu eskalasi kerugian berikut:\n\n"

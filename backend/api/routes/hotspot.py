@@ -628,16 +628,20 @@ def extract_region_from_query(query: str) -> str:
         re.IGNORECASE,
     )
     stopwords = {
-        "indonesia", "sana", "sini", "situ", "mana", "atas", "bawah", "peta",
+        "indonesia", "indo", "sana", "sini", "situ", "mana", "apa", "saja", "atas", "bawah", "peta",
         "hari", "ini", "sekarang", "terkini", "terbaru", "live", "yang", "ada",
-        "tidak", "apakah", "dengan", "untuk", "dari", "pada", "dalam",
+        "tidak", "apakah", "dengan", "untuk", "dari", "pada", "dalam", "paling",
+        "banyak", "terbanyak", "besar", "terbesar", "kecil", "terkecil", "tinggi",
+        "tertinggi", "parah", "terparah", "kasus", "kebakaran", "karhutla", "titik",
+        "panas", "api", "provinsi", "kabupaten", "kota", "daerah", "wilayah", "berapa",
+        "daftar", "top", "lima", "tiga", "sepuluh", "seluruh", "nasional",
     }
     matches = pattern.findall(q_clean)
     for m in reversed(matches):
-        tokens = [t for t in m.strip().split() if t.lower() not in stopwords]
+        tokens = [t for t in m.strip().split() if t.lower() not in stopwords and not t.isdigit()]
         if tokens:
             candidate = " ".join(tokens)
-            if len(candidate) >= 3:
+            if len(candidate) >= 3 and candidate.lower() in FIRMSClient.REGION_BBOXES:
                 return candidate.title()
 
     return "Indonesia"
