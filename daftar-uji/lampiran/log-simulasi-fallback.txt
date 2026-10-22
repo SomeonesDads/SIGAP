@@ -1,0 +1,17 @@
+# Hasil simulasi logika fallback frontend (lib/api.ts + lib/monitoring.ts asli, fetch dipaksa HTTP 502)
+# Dijalankan: 2026-10-22T02:03:11Z
+
+{"q":"Ada titik api di Pulang Pisau hari ini?","region":"Pulang Pisau","source":"Local Fallback Cache","is_live":false,"total_raw":0,"clusters":0,"top":"undefined -"}
+{"q":"Pantau karhutla di Riau","region":"Riau","source":"Local Fallback Cache","is_live":false,"total_raw":44,"clusters":1,"top":"HS-0379 Kecamatan Mandau, Kabupaten Bengkalis"}
+{"q":"Cek kebakaran di daerah medan kota","region":"Medan Kota","source":"Local Fallback Cache","is_live":false,"total_raw":0,"clusters":0,"top":"undefined -"}
+{"q":"Status api di Seruyan","region":"Seruyan","source":"Local Fallback Cache","is_live":false,"total_raw":281,"clusters":1,"top":"HS-0412 Kecamatan Seruyan Hilir, Kabupaten Seruyan"}
+{"q":"Berapa kerugian jika api di Ketapang dibiarkan?","region":"Ketapang","source":"Local Fallback Cache","is_live":false,"total_raw":192,"clusters":1,"top":"HS-0421 Kecamatan Kendawangan, Kabupaten Ketapang"}
+{"q":"Halo SIGAP","region":"Indonesia","source":"Local Fallback Cache","is_live":false,"total_raw":10,"clusters":10,"top":"HS-0412 Kecamatan Seruyan Hilir, Kabupaten Seruyan"}
+{"q":"Kebakaran di Kabupaten Bogor","region":"Bogor","source":"Local Fallback Cache","is_live":false,"total_raw":0,"clusters":0,"top":"undefined -"}
+{"q":"(dashboard poll Indonesia)","source":"Local Fallback Cache","is_live":false,"clusters":10,"ids":["HS-0412:tinggi:96.4","HS-0415:tinggi:94.8","HS-0418:tinggi:93.2","HS-0398:tinggi:91.5","HS-0421:tinggi:88.6","HS-0405:tinggi:83.4","HS-0417:sedang:69.3","HS-0430:sedang:68.1","HS-0388:sedang:64.5","HS-0379:tinggi:81.2"]}
+
+ranked: HS-0412,HS-0415,HS-0418,HS-0398,HS-0421,HS-0405,HS-0379,HS-0417,HS-0430,HS-0388
+critical>=85: HS-0412,HS-0415,HS-0418,HS-0398,HS-0421
+peatland: HS-0412,HS-0415,HS-0418,HS-0398,HS-0421,HS-0379
+settlement<=3km: HS-0412,HS-0415,HS-0418,HS-0398,HS-0421,HS-0405,HS-0379,HS-0388
+sev count: {"tinggi":7,"sedang":3}
