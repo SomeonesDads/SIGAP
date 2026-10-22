@@ -1,4 +1,4 @@
-# SIGAP: Sistem Inteligensi Geospasial untuk Analisis dan Prediksi
+# SIGAP: Sistem Inteligensi Geospasial untuk Analisis dan Prediksi 
 ### Platform Investigasi Otonom dan Prioritisasi Respons Kebakaran Hutan dan Lahan
 
 SIGAP (Sistem Informasi dan Tanggap Cepat Karhutla) adalah platform berbasis kecerdasan buatan dan sistem multi agen untuk pemantauan, investigasi geospasial, serta penentuan prioritas respons operasional kebakaran hutan dan lahan (karhutla) di Indonesia. Sistem ini menyatukan deteksi anomali termal satelit secara waktu nyata, akuisisi citra satelit multispektral, segmentasi area terbakar berbasis pemelajaran mendalam (deep learning), analisis tingkat keparahan kebakaran melalui indeks spektral dNBR, serta pemeringkatan risiko multikriteria ke dalam satu alur kerja terpadu.
