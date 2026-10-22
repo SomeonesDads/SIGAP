@@ -332,14 +332,48 @@ def _encode_6band_tiff_8bit_b64(
 
 
 def _get_gcp_access_token() -> Optional[str]:
-    """Obtain a Google Cloud Bearer access token via `google.auth` ADC or `gcloud auth print-access-token`."""
+    """Obtain a Google Cloud Bearer access token via Cloud Run Metadata Server, ADC, or gcloud CLI."""
+    import json
     import os
     import subprocess
+    import requests
 
     env_tok = os.getenv("VERTEX_ACCESS_TOKEN", "").strip()
     if env_tok:
         return env_tok
 
+    # 1. Explicit Service Account JSON content passed via environment variable (e.g. Cloud Run Secret / Env)
+    sa_json_raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    if sa_json_raw:
+        try:
+            from google.oauth2 import service_account
+            import google.auth.transport.requests
+
+            sa_info = json.loads(sa_json_raw)
+            creds = service_account.Credentials.from_service_account_info(
+                sa_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            creds.refresh(google.auth.transport.requests.Request())
+            if creds.token:
+                return str(creds.token)
+        except Exception as sa_exc:
+            logger.debug("GOOGLE_APPLICATION_CREDENTIALS_JSON token fetch skipped: %s", sa_exc)
+
+    # 2. Google Cloud Run / Compute Engine Internal Metadata Server (fastest & zero-config on Cloud Run)
+    try:
+        meta_resp = requests.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"},
+            timeout=1.2,
+        )
+        if meta_resp.status_code == 200:
+            tok = str(meta_resp.json().get("access_token", "")).strip()
+            if tok:
+                return tok
+    except Exception:
+        pass
+
+    # 3. Standard Application Default Credentials (ADC)
     try:
         import google.auth
         import google.auth.transport.requests
@@ -352,6 +386,7 @@ def _get_gcp_access_token() -> Optional[str]:
     except Exception as auth_exc:
         logger.debug("google.auth.default token fetch skipped: %s", auth_exc)
 
+    # 4. Local gcloud CLI fallback
     try:
         out = subprocess.check_output(
             ["gcloud", "auth", "print-access-token"],
