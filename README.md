@@ -1,4 +1,4 @@
-# SIGAP: Agen Karhutla
+# SIGAP: Sistem Inteligensi Geospasial untuk Analisis dan Prediksi
 ### Platform Investigasi Otonom dan Prioritisasi Respons Kebakaran Hutan dan Lahan
 
 SIGAP (Sistem Informasi dan Tanggap Cepat Karhutla) adalah platform berbasis kecerdasan buatan dan sistem multi agen untuk pemantauan, investigasi geospasial, serta penentuan prioritas respons operasional kebakaran hutan dan lahan (karhutla) di Indonesia. Sistem ini menyatukan deteksi anomali termal satelit secara waktu nyata, akuisisi citra satelit multispektral, segmentasi area terbakar berbasis pemelajaran mendalam (deep learning), analisis tingkat keparahan kebakaran melalui indeks spektral dNBR, serta pemeringkatan risiko multikriteria ke dalam satu alur kerja terpadu.
@@ -197,7 +197,7 @@ Pengembangan platform SIGAP dilaksanakan melalui kolaborasi tim lintas disiplin 
   Mengembangkan sistem kecerdasan buatan (AI), perancangan arsitektur dan instruksi multi agen, eksperimen pemelajaran mesin, serta pelatihan dan penyesuaian model (model tuning) segmentasi area terbakar DINOv3 BurnSeg dan UNet.
 
 * **Aurelia Jennifer Gunawan (Hipster)**
-  Merancang desain antarmuka dan pengalaman pengguna (UI/UX) secara menyeluruh pada Figma, menyusun sistem desain visual dasbor operasional, serta berkontribusi dalam pembuatan materi presentasi (pitch deck).
+  Merancang desain antarmuka dan pengalaman pengguna (UI/UX) secara menyeluruh pada Figma, menyusun sistem desain visual dasbor operasional, serta berkontribusi dalam pembuatan pitch deck.
 
 * **Hakam Avicena Mustain (Hustler)**
   Menyusun analisis permasalahan operasional, perumusan nilai solusi dan strategi implementasi, pembuatan materi presentasi (pitch deck), serta produksi video demonstrasi produk.
