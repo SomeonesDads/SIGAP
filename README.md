@@ -203,7 +203,7 @@ Pengembangan platform SIGAP dilaksanakan melalui kolaborasi tim lintas disiplin 
   Menyusun analisis permasalahan operasional, perumusan nilai solusi dan strategi implementasi, pembuatan materi presentasi (pitch deck), serta produksi video demonstrasi produk.
 
 * **Nathan Edward Christofer Marpaung (Hustler)**
-  Menyusun narasi produk, pembuatan materi presentasi (pitch deck), serta pengambilan gambar dan penyuntingan video demonstrasi produk.
+  Menyusun narasi produk, pembuatan materi presentasi (pitch deck), pengambilan gambar, serta pembuatan script dan penyuntingan video demonstrasi produk.
 
 ## 7. Lisensi
 
