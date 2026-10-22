@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="100" height="50" viewBox="0 0 100 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="toggle">
+<path id="Rectangle 3" d="M25 1.5H75C87.9787 1.5 98.5 12.0213 98.5 25C98.5 37.9787 87.9787 48.5 75 48.5H25C12.0213 48.5 1.5 37.9787 1.5 25C1.5 12.0213 12.0213 1.5 25 1.5Z" fill="#F8FAFC" stroke-width="3" stroke="#1E293B"/>
+<circle id="Ellipse 1" cx="74" cy="25" r="20" fill="#1E293B"/>
+</g>
+</svg>

@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Design tokens from the SIGAP Figma file (Cover + Foundations, light mode) */
+@theme {
+  --color-sigap-crimson: #d51411;
+  --color-sigap-amber: #d97706;
+  --color-sigap-gold: #ebbc56;
+  --color-sigap-cobalt: #1170d5;
+  --color-sigap-teal: #0f7b5a;
+  --color-sigap-panel: #d9d9d9;
+  --color-sigap-app: #f1f5f9;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-display: var(--font-rajdhani), var(--font-inter), sans-serif;
+}
+
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Leaflet: let fire markers render without the default white box */
+.sigap-marker {
+  background: transparent;
+  border: none;
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #c6ecf7;
+}
+
+/* Push the Esri physical basemap toward the saturated relief look of the Figma map */
+.sigap-monitor-map .leaflet-tile-pane {
+  filter: saturate(1.2);
+}
+
+.sigap-tactical-marker,
+.sigap-route-arrow {
+  background: transparent;
+  border: none;
+}
+
+.leaflet-popup-pane {
+  z-index: 1500 !important;
+}
