@@ -53,8 +53,42 @@ class ChatMessageResponse(BaseModel):
 
 
 def _get_vertex_access_token() -> tuple[str | None, str]:
-    """Obtain an OAuth2 Bearer token from Application Default Credentials (ADC) for Vertex AI."""
+    """Obtain an OAuth2 Bearer token from Cloud Run Metadata Server, Service Account JSON, or ADC."""
     project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() or "hackathon-primestep-04"
+
+    # 1. Explicit Service Account JSON content passed via environment variable
+    sa_json_raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    if sa_json_raw:
+        try:
+            from google.oauth2 import service_account
+
+            sa_info = json.loads(sa_json_raw)
+            creds = service_account.Credentials.from_service_account_info(
+                sa_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            creds.refresh(google.auth.transport.requests.Request())
+            if creds.token:
+                return str(creds.token), (sa_info.get("project_id") or project_id)
+        except Exception as sa_exc:
+            logger.debug("GOOGLE_APPLICATION_CREDENTIALS_JSON token fetch skipped: %s", sa_exc)
+
+    # 2. Google Cloud Run / Compute Engine Internal Metadata Server
+    try:
+        import requests
+
+        meta_resp = requests.get(
+            "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+            headers={"Metadata-Flavor": "Google"},
+            timeout=1.2,
+        )
+        if meta_resp.status_code == 200:
+            tok = str(meta_resp.json().get("access_token", "")).strip()
+            if tok:
+                return tok, project_id
+    except Exception:
+        pass
+
+    # 3. Standard Application Default Credentials (ADC)
     try:
         creds, adc_project = google.auth.default(
             scopes=["https://www.googleapis.com/auth/cloud-platform"]
@@ -66,12 +100,330 @@ def _get_vertex_access_token() -> tuple[str | None, str]:
         return None, project_id
 
 
+# ---------------------------------------------------------------------------
+# Domain Guardrail: Restrict interactions strictly to Wildfire / Karhutla
+# ---------------------------------------------------------------------------
+
+_PROMPT_INJECTION_PATTERNS: tuple[str, ...] = (
+    "ignore previous",
+    "ignore all previous",
+    "disregard previous",
+    "forget previous",
+    "abaikan instruksi",
+    "lupakan instruksi",
+    "abaikan aturan",
+    "lupakan aturan",
+    "system prompt",
+    "jailbreak",
+    "act as a",
+    "berperan sebagai",
+)
+
+_EXPLICIT_OFF_TOPIC_KEYWORDS: tuple[str, ...] = (
+    "resep",
+    "masak",
+    "masakan",
+    "kuliner",
+    "nasi goreng",
+    "ayam goreng",
+    "hotel murah",
+    "tiket pesawat",
+    "bioskop",
+    "nonton film",
+    "lagu",
+    "lirik",
+    "konser",
+    "sepak bola",
+    "liga inggris",
+    "skor pertandingan",
+    "cristiano ronaldo",
+    "lionel messi",
+    "kripto",
+    "crypto",
+    "bitcoin",
+    "trading saham",
+    "forex",
+    "buatkan kode",
+    "tulis kode",
+    "write code",
+    "python script",
+    "javascript",
+    "typescript",
+    "react component",
+    "html css",
+    "leetcode",
+    "algoritma sorting",
+    "kalkulus",
+    "integral",
+    "persamaan kuadrat",
+    "puisi cinta",
+    "cerpen",
+    "dongeng",
+    "lelucon",
+    "cerita lucu",
+    "ramalan zodiak",
+    "horoskop",
+    "tips pacaran",
+    "jodoh",
+    "partai politik",
+    "kampanye pemilu",
+    "mobile legends",
+    "valorant",
+    "genshin",
+)
+
+_WILDFIRE_DOMAIN_KEYWORDS: tuple[str, ...] = (
+    "api",
+    "kebakaran",
+    "karhutla",
+    "hotspot",
+    "titik panas",
+    "titik api",
+    "bara",
+    "terbakar",
+    "asap",
+    "kabut",
+    "ispu",
+    "pm2.5",
+    "gambut",
+    "peat",
+    "hutan",
+    "lahan",
+    "vegetasi",
+    "savana",
+    "satelit",
+    "firms",
+    "viirs",
+    "modis",
+    "sentinel",
+    "stac",
+    "dnbr",
+    "dinov3",
+    "unet",
+    "segmentasi",
+    "klaster",
+    "cluster",
+    "dbscan",
+    "frp",
+    "radiasi",
+    "termal",
+    "thermal",
+    "mcda",
+    "risiko",
+    "prioritas",
+    "skor",
+    "keparahan",
+    "severity",
+    "pemadam",
+    "pemadaman",
+    "manggala agni",
+    "bpbd",
+    "bnpb",
+    "klhk",
+    "bmkg",
+    "brgm",
+    "mpa",
+    "regu",
+    "tim",
+    "personel",
+    "armada",
+    "posko",
+    "pos-",
+    "udp-",
+    "taktis",
+    "taktik",
+    "perimeter",
+    "sekat bakar",
+    "sekat kanal",
+    "sumur bor",
+    "embung",
+    "sumber air",
+    "pompa",
+    "water bombing",
+    "helikopter",
+    "drone",
+    "uav",
+    "rute",
+    "akses",
+    "evakuasi",
+    "permukiman",
+    "desa",
+    "kecamatan",
+    "kabupaten",
+    "provinsi",
+    "wilayah",
+    "daerah",
+    "lokasi",
+    "koordinat",
+    "peta",
+    "radius",
+    "hektare",
+    "ha",
+    "angin",
+    "cuaca",
+    "kemarau",
+    "hujan",
+    "kelembapan",
+    "flamabilitas",
+    "kerugian",
+    "rugi",
+    "biaya",
+    "dampak",
+    "ekonomi",
+    "emisi",
+    "karbon",
+    "co2",
+    "dibiarkan",
+    "pantau",
+    "pantauan",
+    "investigasi",
+    "analisis",
+    "status",
+    "kondisi",
+    "situasi",
+    "sitrep",
+    "laporan",
+    "siaga",
+    "darurat",
+    "bahaya",
+    "aman",
+    "bencana",
+    "wildfire",
+    "fire",
+    "burn",
+    "smoke",
+    "dispatch",
+    "sigap",
+)
+
+
+def evaluate_domain_guardrail(message: str) -> tuple[bool, str | None]:
+    """Validate whether a user query belongs to the SIGAP wildfire/karhutla domain.
+
+    Returns:
+        tuple[bool, str | None]: (is_allowed, refusal_markdown_if_blocked)
+    """
+    import re
+
+    q_clean = (message or "").strip()
+    if not q_clean:
+        return False, "Mohon masukkan instruksi terkait pemantauan titik panas, analisis risiko karhutla, atau alokasi tim pemadam."
+
+    q_lower = q_clean.lower()
+
+    # 1. Block prompt injection / instruction override attempts
+    if any(pat in q_lower for pat in _PROMPT_INJECTION_PATTERNS):
+        return (
+            False,
+            "### 🛡️ Guardrail Keamanan & Domain SIGAP Aktif\n\n"
+            "Permintaan ditolak karena terdeteksi mencoba mengubah atau mengabaikan instruksi operasional sistem.\n\n"
+            "**SIGAP (Sistem Informasi & Tanggap Cepat Karhutla)** hanya memproses instruksi yang berkaitan dengan:\n"
+            "* **Deteksi & Pemantauan Titik Panas** (*NASA FIRMS VIIRS/MODIS* & *AWS STAC Sentinel-2*)\n"
+            "* **Segmentasi Area Terbakar & Penilaian Risiko** (*DINOv3 BurnSeg*, *dNBR*, & *MCDA*)\n"
+            "* **Valuasi Dampak Ekonomi/Emisi & Rencana Taktis Pemadaman** (*Manggala Agni*, *BPBD*, & *Drone*)",
+        )
+
+    # 2. Block explicit off-topic categories (even if they mention an Indonesian city)
+    for kw in _EXPLICIT_OFF_TOPIC_KEYWORDS:
+        if re.search(rf"\b{re.escape(kw)}\b", q_lower):
+            return (
+                False,
+                "### 🛡️ di Luar Fokus Operasional Karhutla (Domain Guardrail)\n\n"
+                f"Maaf, saya adalah **SIGAP Wildfire Response Orchestrator** yang dikhususkan untuk **penanganan kebakaran hutan dan lahan (karhutla)** serta manajemen bencana terkait.\n\n"
+                f"Pertanyaan Anda mengenai **`{kw}`** berada di luar cakupan tugas operasional pemadaman dan intelijen satelit kami.\n\n"
+                "**Contoh perintah yang dapat saya proses:**\n"
+                "* *\"Analisis titik panas dan radius kebakaran di Pulang Pisau\"*\n"
+                "* *\"Berapa estimasi kerugian ekonomi dan emisi karbon jika api di Seruyan dibiarkan 24 jam?\"*\n"
+                "* *\"Susun rencana taktis pengerahan regu Manggala Agni dan drone di Kalimantan Tengah\"*",
+            )
+
+    # 3. Check if query contains any wildfire/environmental/operational keyword OR a known Indonesian region
+    has_domain_kw = any(kw in q_lower for kw in _WILDFIRE_DOMAIN_KEYWORDS)
+    has_known_region = any(
+        name != "indonesia" and re.search(rf"\b{re.escape(name)}\b", q_lower)
+        for name in FIRMSClient.REGION_BBOXES.keys()
+    )
+
+    if has_domain_kw or has_known_region:
+        return True, None
+
+    # 4. Otherwise reject general out-of-domain queries
+    return (
+        False,
+        "### 🛡️ di Luar Fokus Operasional Karhutla (Domain Guardrail)\n\n"
+        "Maaf, **SIGAP Wildfire Response Orchestrator** hanya melayani instruksi yang berkaitan dengan **pemantauan kebakaran hutan dan lahan (karhutla)**, telemetri satelit, analisis cuaca/gambut, valuasi dampak kebakaran, serta pengerahan taktis tim pemadam.\n\n"
+        "**Silakan ajukan pertanyaan seputar operasional karhutla, misalnya:**\n"
+        "* *\"Cek status titik panas aktif di Riau atau Kalimantan Tengah\"*\n"
+        "* *\"Bagaimana arah angin dan risiko perambatan api menuju permukiman terdekat?\"*\n"
+        "* *\"Berikan rekomendasi alokasi perimeter POS-1 hingga POS-4 untuk pemadaman\"*",
+    )
+
+
+# In-memory multi-turn session store keeping active region focus and recent conversation turns
+_SESSION_CONTEXT: dict[str, dict[str, Any]] = {}
+
+
+def _resolve_session_region(session_id: str, message: str) -> str:
+    """Resolve target region from current message, or inherit from prior turn in the session if unspecified."""
+    extracted = extract_region_from_query(message)
+    q_lower = (message or "").lower()
+    explicitly_national = any(
+        kw in q_lower
+        for kw in ("indonesia", "indo", "nasional", "provinsi", "paling banyak", "terbanyak", "terbesar", "mana saja")
+    )
+
+    ctx = _SESSION_CONTEXT.setdefault(session_id, {"last_region": "Indonesia", "history": []})
+    default_ctx = _SESSION_CONTEXT.setdefault("default", {"last_region": "Indonesia", "history": []})
+
+    if extracted != "Indonesia":
+        ctx["last_region"] = extracted
+        default_ctx["last_region"] = extracted
+        return extracted
+    if explicitly_national:
+        ctx["last_region"] = "Indonesia"
+        default_ctx["last_region"] = "Indonesia"
+        return "Indonesia"
+
+    # Inherit previous region if this is a follow-up question without a new location
+    saved = ctx.get("last_region") or default_ctx.get("last_region") or "Indonesia"
+    return str(saved)
+
+
+def _build_gemini_contents(session_id: str, user_message: str) -> list[dict[str, Any]]:
+    """Build multi-turn contents array for Vertex AI Gemini (last 4 prior turns + current user message)."""
+    ctx = _SESSION_CONTEXT.get(session_id) or _SESSION_CONTEXT.get("default") or {}
+    history: list[dict[str, Any]] = list(ctx.get("history", []))[-4:]
+    history.append({"role": "user", "parts": [{"text": user_message}]})
+    return history
+
+
+def _record_session_turn(session_id: str, user_message: str, model_reply: str) -> None:
+    """Append user and model turn to session memory (capped at 6 messages)."""
+    for key in {session_id, "default"}:
+        ctx = _SESSION_CONTEXT.setdefault(key, {"last_region": "Indonesia", "history": []})
+        hist: list[dict[str, Any]] = ctx.setdefault("history", [])
+        hist.append({"role": "user", "parts": [{"text": user_message}]})
+        hist.append({"role": "model", "parts": [{"text": model_reply[:1200]}]})
+        if len(hist) > 6:
+            ctx["history"] = hist[-6:]
+
+
 @router.post("/", response_model=ChatMessageResponse)
 async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
     """Execute live multi-agent tools and synthesize response using Vertex AI Gemini 2.5 Flash via ADC."""
     inv_id = payload.investigation_id or "inv-live-session"
 
-    target_region = extract_region_from_query(payload.message)
+    # 0. Pre-execution Domain Guardrail check before invoking satellite/ML tools
+    is_allowed, guardrail_reply = evaluate_domain_guardrail(payload.message)
+    if not is_allowed and guardrail_reply:
+        return ChatMessageResponse(
+            response=guardrail_reply,
+            investigation_id=inv_id,
+            model_used="sigap-domain-guardrail",
+            is_live_llm=False,
+        )
+
+    target_region = _resolve_session_region(inv_id, payload.message)
     resolved_bbox = FIRMSClient.resolve_region(target_region)
 
     # 1. Execute live tools: NASA FIRMS + DBSCAN + MCDA + OSM Reverse Geocoding for target_region
@@ -99,6 +451,9 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
 
         system_instruction = (
             "Anda adalah SIGAP Wildfire Response Orchestrator (berbasis Google ADK & Vertex AI Gemini 2.5 Flash).\n"
+            "GUARDRAIL DOMAIN (WAJIB): Anda HANYA boleh menjawab pertanyaan yang berkaitan dengan kebakaran hutan dan lahan (karhutla), "
+            "pemantauan satelit/titik panas, kondisi cuaca/lahan gambut, dampak lingkungan/ekonomi kebakaran, dan operasi pemadaman/evakuasi. "
+            "Jika pertanyaan pengguna di luar fokus karhutla/kebencanaan, tolak dengan sopan dan tegas.\n"
             "Jawablah langsung pertanyaan pengguna dalam Bahasa Indonesia menggunakan format Markdown yang rapi.\n"
             f"FAKTA SATELIT LIVE: Pemindaian satelit NASA FIRMS VIIRS 375m NRT pada wilayah '{target_region}' "
             f"(koordinat tengah {center_lat:.4f}°, {center_lon:.4f}°, area {bbox_str}) mendeteksi **0 titik panas aktif** "
@@ -121,7 +476,7 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
                         headers={"Authorization": f"Bearer {token}"},
                         json={
                             "systemInstruction": {"parts": [{"text": system_instruction}]},
-                            "contents": [{"role": "user", "parts": [{"text": payload.message}]}],
+                            "contents": _build_gemini_contents(inv_id, payload.message),
                             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 768},
                         },
                     )
@@ -131,6 +486,7 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
                             parts = candidates[0].get("content", {}).get("parts", [])
                             llm_text = "".join(str(p.get("text", "")) for p in parts).strip()
                             if llm_text:
+                                _record_session_turn(inv_id, payload.message, llm_text)
                                 return ChatMessageResponse(
                                     response=llm_text,
                                     investigation_id=inv_id,
@@ -148,12 +504,13 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
 
         zero_reply = (
             f"### ✅ Status Pantauan Kebakaran — {target_region} ({live_badge})\n\n"
-            f"**Tidak ditemukan kebakaran aktif (0 titik panas)** di wilayah **{target_region}** berdasarkan pemindaian satelit **NASA FIRMS (VIIRS 375m NRT)** dalam 48 jam terakhir.\n\n"
+            f"**Tidak ditemukan kebakaran aktif (0 titik panas)** di wilayah **{target_region}** berdasarkan pemindaian lintas-satelit **NASA FIRMS (VIIRS S-NPP & NOAA-20 NRT)** dalam 48 jam terakhir.\n\n"
             f"* **Area Pemindaian:** **{target_region}** (`{center_lat:.4f}°, {center_lon:.4f}°` • BBox `{bbox_str}`).\n"
             f"* **Deteksi Termal (Perception Agent):** **0 titik panas aktif** • **0 klaster DBSCAN** — status wilayah **AMAN (Nihil Anomali Termal)**.\n"
             f"* **Kondisi Lingkungan & Bahan Bakar:** Kelembapan permukaan terpantau stabil (**~64% RH**), kecepatan angin **12 km/j**, dan indeks flamabilitas **rendah (38%)**.\n"
             f"* **Referensi Nasional Terkini:** Sementara **{target_region}** aman, klaster prioritas #1 nasional saat ini terpantau di **{nat_loc}** ({nat_dist}) dengan **{nat_cnt} titik panas** (FRP **{nat_frp} MW**, Skor MCDA **{nat_score}/100**)."
         )
+        _record_session_turn(inv_id, payload.message, zero_reply)
         return ChatMessageResponse(
             response=zero_reply,
             investigation_id=inv_id,
@@ -276,6 +633,8 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
             "hotspot_count": h.get("hotspotCount"),
             "total_frp_mw": h.get("totalFrp"),
             "mcda_risk_score": h.get("riskScore"),
+            "sensor_confidence": h.get("sensorConfidence", 0.90),
+            "downwind_alignment": h.get("downwindAlignment", 0.0),
             "soil": h.get("soil"),
             "peatland": h.get("peatland"),
             "wind_speed_kmh": h.get("windSpeedKmh"),
@@ -319,9 +678,16 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         ),
     }
 
+    top_sensor_conf = int(round(float(top.get("sensorConfidence", 0.90)) * 100))
+    top_downwind = float(top.get("downwindAlignment", 0.0))
+
     system_instruction = (
         "Anda adalah SIGAP Wildfire Intelligence & Tactical Orchestrator (berbasis Google ADK & Vertex AI Gemini 2.5 Flash), "
         "sistem komando cerdas penanganan kebakaran hutan dan lahan (karhutla) Indonesia untuk BPBD, Manggala Agni, dan KLHK.\n"
+        "GUARDRAIL DOMAIN (WAJIB DIPATUHI): Anda HANYA diizinkan menjawab pertanyaan yang berkaitan dengan pemantauan titik panas/karhutla, "
+        "telemetri satelit, kondisi cuaca/angin/gambut, valuasi kerugian & emisi kebakaran, serta pengerahan taktis regu pemadam/evakuasi. "
+        "Apabila pengguna menyisipkan pertanyaan di luar fokus pemadaman/karhutla (seperti koding umum, kuliner, hiburan, olahraga, politik, kripto, dll.), "
+        "tolak bagian tersebut dengan tegas dan fokuskan jawaban hanya pada operasional karhutla.\n"
         "ATURAN UTAMA MENJAWAB PENGGUNA:\n"
         "1. JAWAB LANGSUNG PERTANYAAN SPESIFIK PENGGUNA (jangan memberikan template yang tidak nyambung dengan pertanyaan):\n"
         "   - Jika pengguna bertanya tentang KERUGIAN EKONOMI / DAMPAK JIKA API DIBIARKAN / EMISI / RISIKO, sajikan analisis komprehensif berbasis data Valuasi Kerugian & Proyeksi Perambatan (dalam Rupiah/Miliar, Hektare 24–72 jam, emisi ton CO2e, dampak pariwisata/kesehatan/permukiman), lalu tutup dengan saran tindakan singkat.\n"
@@ -329,8 +695,8 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         "   - Jika pengguna bertanya tentang STATUS KEBAKARAN / CUACA / LOKASI, jawab sesuai data telemetri satelit live.\n"
         "2. Gunakan Bahasa Indonesia yang profesional, tajam, dan terstruktur dengan Markdown.\n"
         "DATA TELEMETRI SATELIT LIVE & VALUASI:\n"
-        f"- Lokasi Fokus: {top_loc} ({top_dist}) di wilayah {target_region} ({total_raw} titik panas VIIRS 375m NRT, {cluster_count} klaster)\n"
-        f"- Vektor Angin & Bahan Bakar: Kecepatan angin {top_wind_kmh} km/j menuju {top_wind_label}, flamabilitas {top_flam_pct}% ({top_soil})\n"
+        f"- Lokasi Fokus: {top_loc} ({top_dist}) di wilayah {target_region} ({total_raw} titik panas lintas-satelit VIIRS S-NPP & NOAA-20 NRT, {cluster_count} klaster, kepercayaan sensor {top_sensor_conf}%)\n"
+        f"- Vektor Angin & Bahan Bakar: Kecepatan angin {top_wind_kmh} km/j menuju {top_wind_label} (indeks dorongan ke permukiman: {top_downwind:+.2f}), flamabilitas {top_flam_pct}% ({top_soil})\n"
         f"- Scene Satelit Sentinel-2 L2A (AWS STAC): {stac_scene_id} (Tutupan awan: {stac_cloud}%)\n"
         f"- Segmentasi DINOv3 BurnSeg Saat Ini: Total {total_ha} Ha (Inti Merah: {red_ha} Ha, Oranye: {orange_ha} Ha, Kuning Perimeter: {yellow_ha} Ha)\n"
         f"- Valuasi Kerugian Ekonomi, Karbon & Proyeksi Jika Dibiarkan (24–72 Jam): {json.dumps(loss_valuation, ensure_ascii=False)}\n"
@@ -348,12 +714,7 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
             "systemInstruction": {
                 "parts": [{"text": system_instruction}],
             },
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": payload.message}],
-                }
-            ],
+            "contents": _build_gemini_contents(inv_id, payload.message),
             "generationConfig": {
                 "temperature": 0.25,
                 "maxOutputTokens": 2048,
@@ -375,6 +736,7 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
                         parts = candidates[0].get("content", {}).get("parts", [])
                         llm_text = "".join(str(p.get("text", "")) for p in parts).strip()
                         if llm_text:
+                            _record_session_turn(inv_id, payload.message, llm_text)
                             return ChatMessageResponse(
                                 response=llm_text,
                                 investigation_id=inv_id,
@@ -392,16 +754,42 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         kw in q_lower
         for kw in ("kerugian", "rugi", "biaya", "dampak", "dibiarkan", "biarkan", "ekonomi", "emisi", "karbon", "bahaya")
     )
+    is_ranking_query = any(
+        kw in q_lower
+        for kw in ("paling banyak", "terbanyak", "terbesar", "tertinggi", "terparah", "5 provinsi", "lima provinsi", "provinsi mana", "daerah mana", "wilayah mana", "daftar", "top", "urutan", "ranking", "berapa")
+    )
     loc_header = (
         f"{top_loc} ({top_dist})"
         if top_loc.strip().lower() == target_region.strip().lower()
         else f"{top_loc}, {target_region}"
     )
 
-    if is_loss_query:
+    if is_ranking_query:
+        ranking_lines: list[str] = []
+        for idx, h in enumerate(hotspots[:5], start=1):
+            h_loc = h.get("location", "Wilayah Pantauan")
+            h_dist = h.get("district", "Indonesia")
+            h_cnt = h.get("hotspotCount", 1)
+            h_frp = h.get("totalFrp", 10.0)
+            h_area = h.get("areaHa", 25)
+            h_score = h.get("riskScore", 75.0)
+            h_soil = h.get("soil", "Gambut/Mineral")
+            ranking_lines.append(
+                f"{idx}. **{h_dist} — {h_loc}**\n"
+                f"   * **Intensitas & Luas:** **{h_cnt} titik panas aktif** • Total FRP **{h_frp} MW** • Estimasi area terbakar **~{h_area} Ha**\n"
+                f"   * **Skor Risiko MCDA:** **{h_score}/100** • Karakteristik lahan: **{h_soil}** (Jarak ke permukiman: **{h.get('settlementKm', 2.0)} km**)"
+            )
+        joined_ranking = "\n".join(ranking_lines)
+        fallback_reply = (
+            f"### 🔥 5 Wilayah / Provinsi dengan Kasus Kebakaran Tertinggi — {target_region} ({live_badge})\n\n"
+            f"Berdasarkan pemindaian satelit **NASA FIRMS (VIIRS S-NPP & NOAA-20 NRT)** yang mendeteksi total **{total_raw} titik panas aktif** dalam **{cluster_count} klaster spasial DBSCAN**, berikut adalah **5 wilayah dengan konsentrasi kebakaran dan skor risiko tertinggi** saat ini:\n\n"
+            f"{joined_ranking}\n\n"
+            f"**Ringkasan Prioritas Utama:** Fokus intervensi tertinggi berada di **{top_loc} ({top_dist})** dengan skor risiko **{top_score}/100** dan luas area terbakar **{total_ha} Ha**."
+        )
+    elif is_loss_query:
         fallback_reply = (
             f"### 📉 Estimasi Kerugian Ekonomi & Ekologis Jika Api Dibiarkan — {loc_header} ({live_badge})\n\n"
-            f"Jika klaster kebakaran aktif di **{loc_header}** (`{c_lat:.4f}°, {c_lon:.4f}°`) dengan luas saat ini **{total_ha} Ha** (Inti Merah **{red_ha} Ha**, FRP **{top_frp} MW**) dibiarkan tanpa intervensi pemadaman, kecepatan angin **{top_wind_kmh} km/j** menuju **{top_wind_label}** pada bahan bakar **{top_soil}** (flamabilitas **{top_flam_pct}%**) akan memicu eskalasi kerugian berikut:\n\n"
+            f"Jika klaster kebakaran aktif di **{loc_header}** (`{c_lat:.4f}°, {c_lon:.4f}°`) dengan luas saat ini **{total_ha} Ha** (Inti Merah **{red_ha} Ha**, FRP **{top_frp} MW**, kepercayaan lintas-satelit **{top_sensor_conf}%**) dibiarkan tanpa intervensi pemadaman, kecepatan angin **{top_wind_kmh} km/j** menuju **{top_wind_label}** pada bahan bakar **{top_soil}** (flamabilitas **{top_flam_pct}%**) akan memicu eskalasi kerugian berikut:\n\n"
             f"* **Proyeksi Meluasnya Area Terbakar:**\n"
             f"  * **Kondisi Saat Ini:** **{total_ha} Ha** (Estimasi kerugian berjalan: **Rp {loss_current_miliar:.2f} Miliar**).\n"
             f"  * **Jika Dibiarkan 24 Jam:** Meluas hingga **~{projected_24h_ha} Ha** (Potensi kerugian langsung: **Rp {loss_24h_miliar:.2f} Miliar**).\n"
@@ -422,7 +810,7 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         base_lon = round(c_lon - a_deg * 1.48 * ux - b_deg * 0.25 * px, 4)
         fallback_reply = (
             f"### 🛡️ Rencana Taktis Alokasi Perimeter & Rute Armada — {loc_header} ({live_badge})\n\n"
-            f"**PERINGATAN OPERASIONAL:** Titik pusat api (`{c_lat:.4f}°, {c_lon:.4f}°`) memiliki luas terbakar **{total_ha} Ha** (Inti Merah **{red_ha} Ha**, FRP **{top_frp} MW**) dan **TIDAK DAPAT DIJANGKAU DARAT** karena terkepung kobaran aktif. Kamera peta telah diarahkan ke lokasi dengan **Rute Konvoi & 5 Sektor Taktis** sesuai arah angin (**{top_wind_kmh} km/j** menuju **{top_wind_label}**):\n\n"
+            f"**PERINGATAN OPERASIONAL:** Titik pusat api (`{c_lat:.4f}°, {c_lon:.4f}°`) memiliki luas terbakar **{total_ha} Ha** (Inti Merah **{red_ha} Ha**, FRP **{top_frp} MW**, kepercayaan lintas-satelit **{top_sensor_conf}%**) dan **TIDAK DAPAT DIJANGKAU DARAT** karena terkepung kobaran aktif. Kamera peta telah diarahkan ke lokasi dengan **Rute Konvoi & 5 Sektor Taktis** sesuai arah angin (**{top_wind_kmh} km/j** menuju **{top_wind_label}**):\n\n"
             f"* **[BASE] Posko Daops / Titik Keberangkatan Armada:** `{base_lat:.4f}°, {base_lon:.4f}°` — Rute konvoi utama menuju **POS-1** (jarak tempuh **{top_dist_km} km**, ETA **{top_eta} menit**).\n"
             f"* **[POS-1] Pos Komando & Jangkar Belakang Angin (Upwind Anchor):** `{pos1_lat:.4f}°, {pos1_lon:.4f}°`\n"
             f"  * **Alokasi:** **1 Unit Komando + 2 Regu Manggala Agni (30 personel) + 2 Truk Tangki Air (10.000L)**.\n"
@@ -441,6 +829,7 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
             f"  * **Taktik & Rute:** Koridor lintas udara langsung dari **BASE** ke atas inti merah (**{red_ha} Ha**) untuk menurunkan suhu pusat api."
         )
 
+    _record_session_turn(inv_id, payload.message, fallback_reply)
     return ChatMessageResponse(
         response=fallback_reply,
         investigation_id=inv_id,

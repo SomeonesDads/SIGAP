@@ -1,7 +1,13 @@
 import type { Investigation } from "@/lib/types";
 import { SAMPLE_HOTSPOTS, type Hotspot } from "@/lib/monitoring";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined" &&
+  window.location.hostname !== "localhost" &&
+  window.location.hostname !== "127.0.0.1"
+    ? ""
+    : "http://localhost:8000");
 
 export interface MonitoringHotspotsResponse {
   is_live: boolean;
@@ -72,7 +78,7 @@ export function guessRegion(query: string): string {
  */
 export async function fetchMonitoringHotspots(
   region = "Indonesia",
-  limit = 30
+  limit = 80
 ): Promise<MonitoringHotspotsResponse> {
   const isBroadQuery = ["indonesia", "idn"].includes(region.trim().toLowerCase());
   try {
@@ -272,7 +278,7 @@ export interface ImageryMetadataResponse {
 
 export async function fetchRawHotspots(
   region = "Indonesia",
-  limit = 300
+  limit = 500
 ): Promise<RawHotspotPoint[]> {
   try {
     const res = await fetch(

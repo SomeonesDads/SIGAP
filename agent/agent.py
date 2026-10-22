@@ -22,6 +22,17 @@ from google.adk.tools import agent_tool
 from google.adk.tools.google_search_tool import GoogleSearchTool
 from google.adk.tools import url_context
 
+from agent.prompts.instructions import (
+    COORDINATION_INSTRUCTION,
+    DOMAIN_GUARDRAIL_INSTRUCTION,
+    FEEDBACK_LEARNING_INSTRUCTION,
+    ORCHESTRATOR_INSTRUCTION,
+    PERCEPTION_FUSION_INSTRUCTION,
+    RISK_SCORING_INSTRUCTION,
+    ROUTING_DISPATCH_INSTRUCTION,
+    VERIFICATION_INSTRUCTION,
+)
+
 # Custom ADK Domain Tool Wrappers
 from agent.tools.firms_tool import fetch_hotspots
 from agent.tools.earth_engine_tool import fetch_satellite_imagery, assess_image_quality
@@ -68,10 +79,10 @@ perception___fusion_agent_google_search_agent = LlmAgent(
   name='Perception___Fusion_Agent_google_search_agent',
   model=GlobalGemini(model='gemini-3.5-flash'),
   description=(
-      'Agent specialized in performing Google searches.'
+      'Agent specialized in performing Google searches for wildfire, hotspot, and meteorological reports.'
   ),
   sub_agents=[],
-  instruction='Use the GoogleSearchTool to find information on the web.',
+  instruction='Use the GoogleSearchTool ONLY to find information related to Indonesian wildfires (karhutla), satellite hotspots, BMKG weather, or disaster reports. Refuse any off-topic web searches.',
   tools=[
     GoogleSearchTool()
   ],
@@ -80,10 +91,10 @@ perception___fusion_agent_url_context_agent = LlmAgent(
   name='Perception___Fusion_Agent_url_context_agent',
   model=GlobalGemini(model='gemini-3.5-flash'),
   description=(
-      'Agent specialized in fetching content from URLs.'
+      'Agent specialized in fetching wildfire and environmental content from URLs.'
   ),
   sub_agents=[],
-  instruction='Use the UrlContextTool to retrieve content from provided URLs.',
+  instruction='Use the UrlContextTool ONLY to retrieve content related to wildfires, satellite telemetry, weather, or disaster management.',
   tools=[
     url_context
   ],
@@ -100,7 +111,7 @@ perception_fusion = LlmAgent(
       'Menyatukan data titik panas dari berbagai sumber (FIRMS, Sipongi, BMKG) dan menilai probabilitas kebakaran nyata.'
   ),
   sub_agents=[],
-  instruction='You are the Perception and Fusion Agent. Resolve conflicting sensor data and multi-satellite reports (such as FIRMS, Sipongi, BMKG, and field reports). Assess the true confidence level and likelihood of actual fire for each detected hotspot instead of just displaying raw coordinates.',
+  instruction=f"{PERCEPTION_FUSION_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     fetch_hotspots,
     fetch_satellite_imagery,
@@ -121,7 +132,7 @@ risk_scoring = LlmAgent(
       'Menghitung skor prioritas dinamis berdasarkan jenis lahan, arah angin, histori kebakaran, dan jarak ke pemukiman.'
   ),
   sub_agents=[],
-  instruction='You are the Risk Scoring Agent. Calculate dynamic priority scores for detected fire clusters using situational reasoning. Evaluate critical factors including land type (peatland vs. mineral), distance to settlements, wind direction, cluster expansion rates, and historical fire recurrence. Adapt factor weights dynamically according to seasonal severity and local context.',
+  instruction=f"{RISK_SCORING_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     score_hotspot_priority,
     rank_all_active_hotspots,
@@ -141,7 +152,7 @@ verification_agent = LlmAgent(
       'Menilai dan memutuskan perlunya verifikasi pendahuluan (drone, citra satelit resolusi tinggi, atau warga) sebelum tim darat dikirim.'
   ),
   sub_agents=[],
-  instruction='You are the Verification Agent. Determine whether a potential hotspot requires preliminary verification (e.g., drone surveillance, high-resolution satellite imagery, or local community confirmation) prior to dispatching ground crews. Weigh the resource cost of false-positive deployments against the danger of delayed intervention.',
+  instruction=f"{VERIFICATION_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     segment_burned_area,
     compute_dnbr,
@@ -157,10 +168,10 @@ routing___dispatch_agent_google_search_agent = LlmAgent(
   name='Routing___Dispatch_Agent_google_search_agent',
   model=GlobalGemini(model='gemini-3.5-flash'),
   description=(
-      'Agent specialized in performing Google searches.'
+      'Agent specialized in performing Google searches for road access, terrain, and firefighting logistics.'
   ),
   sub_agents=[],
-  instruction='Use the GoogleSearchTool to find information on the web.',
+  instruction='Use the GoogleSearchTool ONLY to find information on road accessibility, water sources, and emergency firefighting logistics. Refuse off-topic searches.',
   tools=[
     GoogleSearchTool()
   ],
@@ -172,7 +183,7 @@ routing_dispatch = LlmAgent(
       'Mengoptimalkan penugasan banyak tim ke banyak titik api berdasarkan akses medan riil dan ketersediaan sumber air.'
   ),
   sub_agents=[],
-  instruction='You are the Routing and Dispatch Agent. Solve global multi-resource allocation problems by matching available firefighting teams to priority hotspots. Minimize total estimated loss (burned area and community risk) by evaluating actual road accessibility, terrain friction, and proximity to water sources rather than simple straight-line distances.',
+  instruction=f"{ROUTING_DISPATCH_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     optimize_team_assignments,
     estimate_travel_time,
@@ -192,7 +203,7 @@ coordination_agent = LlmAgent(
       'Menyusun komunikasi operasional lapangan, memantau pembaruan ETA, dan mengidentifikasi eskalasi darurat bagi pengambil keputusan.'
   ),
   sub_agents=[],
-  instruction='You are the Coordination Agent. Draft operational messages and updates for field personnel. Track operational progress, update ETAs when obstacles arise, and flag critical situations (such as urgent civilian evacuations) for immediate human supervisor escalation.',
+  instruction=f"{COORDINATION_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     estimate_travel_time,
     explain_priority,
@@ -210,7 +221,7 @@ feedback_learning = LlmAgent(
       'Mengevaluasi akurasi keputusan pasca-insiden untuk memperbarui bobot penilaian dan meningkatkan performa sistem di masa mendatang.'
   ),
   sub_agents=[],
-  instruction='You are the Feedback and Learning Agent. Review post-incident data to compare initial confidence assessments and risk scores against actual field outcomes. Recommend adjustments to scoring weights and dispatch logic to continuously enhance system decision accuracy.',
+  instruction=f"{FEEDBACK_LEARNING_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     score_hotspot_priority,
     compute_burned_area,
@@ -225,10 +236,10 @@ wildfire_response_orchestrator_google_search_agent = LlmAgent(
   name='Wildfire_Response_Orchestrator_google_search_agent',
   model=GlobalGemini(model='gemini-3.5-flash'),
   description=(
-      'Agent specialized in performing Google searches.'
+      'Agent specialized in performing Google searches for wildfire and disaster context.'
   ),
   sub_agents=[],
-  instruction='Use the GoogleSearchTool to find information on the web.',
+  instruction='Use the GoogleSearchTool ONLY to find information related to Indonesian forest/land fires (karhutla), meteorology, and disaster response. Refuse any off-topic searches.',
   tools=[
     GoogleSearchTool()
   ],
@@ -237,10 +248,10 @@ wildfire_response_orchestrator_url_context_agent = LlmAgent(
   name='Wildfire_Response_Orchestrator_url_context_agent',
   model=GlobalGemini(model='gemini-3.5-flash'),
   description=(
-      'Agent specialized in fetching content from URLs.'
+      'Agent specialized in fetching wildfire and disaster content from URLs.'
   ),
   sub_agents=[],
-  instruction='Use the UrlContextTool to retrieve content from provided URLs.',
+  instruction='Use the UrlContextTool ONLY to retrieve content from URLs related to wildfire monitoring, weather, or emergency response.',
   tools=[
     url_context
   ],
@@ -252,9 +263,11 @@ root_agent = LlmAgent(
       'Mengorkestrasi seluruh alur respons penanggulangan karhutla dan mendelegasikan tugas ke 6 sub-agent spesialis.'
   ),
   sub_agents=[perception_fusion, risk_scoring, verification_agent, routing_dispatch, coordination_agent, feedback_learning],
-  instruction='You are the primary Wildfire Response Orchestrator for managing forest and land fire operations. Coordinate the response workflow by delegating tasks to your specialized sub-agents. Delegate raw hotspot consolidation and confidence assessment to the **Perception & Fusion Agent**. Delegate multi-factor contextual risk modeling to the **Risk Scoring Agent**. Delegate pre-dispatch checking decisions to the **Verification Agent**. Delegate team-to-target assignment optimization to the **Routing & Dispatch Agent**. Delegate field briefing drafts and escalation alerts to the **Coordination Agent**. Delegate post-incident evaluations and parameter adjustments to the **Feedback & Learning Agent**. Synthesize comprehensive situation reports and actionable recommendations for decision-makers.',
+  instruction=ORCHESTRATOR_INSTRUCTION,
   tools=[
     agent_tool.AgentTool(agent=wildfire_response_orchestrator_google_search_agent),
     agent_tool.AgentTool(agent=wildfire_response_orchestrator_url_context_agent)
   ],
 )
+
+

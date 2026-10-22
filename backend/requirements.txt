@@ -15,5 +15,7 @@ torchvision>=0.17.0
 scikit-learn>=1.4.0
 Pillow>=10.2.0
 python-dotenv>=1.0.1
+requests>=2.31.0
+google-auth>=2.29.0
 redis>=5.0.0
 weasyprint>=62.0

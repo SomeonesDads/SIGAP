@@ -353,6 +353,286 @@ export const SAMPLE_HOTSPOTS: Hotspot[] = [
     humidityPct: 51,
     flammabilityIndex: 0.81,
   },
+  {
+    id: "HS-0432",
+    lat: -2.85,
+    lon: 114.12,
+    severity: "tinggi",
+    riskScore: 95.1,
+    distanceKm: 19,
+    etaMin: 31,
+    areaHa: 340,
+    dnbrMean: 0.71,
+    imagery: "FIRMS NRT 2026-10-21 06:15 UTC",
+    peatland: true,
+    settlementKm: 1.1,
+    status: "Terkonfirmasi citra (Live FIRMS)",
+    location: "Desa Bereng Bengkel, Kec. Sebangau Kuala",
+    district: "Kab. Pulang Pisau, Kalimantan Tengah",
+    fireType: "Bawah permukaan (gambut)",
+    soil: "Gambut dalam > 3 m",
+    lastCondition: "Klaster aktif (214 titik panas, FRP 1510.2 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 214,
+    totalFrp: 1510.2,
+    windSpeedKmh: 22,
+    windDirectionDeg: 310,
+    windDirectionLabel: "Barat Laut (310°)",
+    humidityPct: 45,
+    flammabilityIndex: 0.93,
+  },
+  {
+    id: "HS-0435",
+    lat: -2.31,
+    lon: 114.38,
+    severity: "tinggi",
+    riskScore: 89.4,
+    distanceKm: 23,
+    etaMin: 37,
+    areaHa: 265,
+    dnbrMean: 0.62,
+    imagery: "FIRMS NRT 2026-10-21 06:20 UTC",
+    peatland: true,
+    settlementKm: 1.8,
+    status: "Terkonfirmasi citra (Live FIRMS)",
+    location: "Kecamatan Mantangai, Kabupaten Kapuas",
+    district: "Kab. Kapuas, Kalimantan Tengah",
+    fireType: "Permukaan & gambut",
+    soil: "Gambut 1-2 m",
+    lastCondition: "Klaster aktif (164 titik panas, FRP 1120.5 MW)",
+    satellite: "VIIRS NOAA-20",
+    hotspotCount: 164,
+    totalFrp: 1120.5,
+    windSpeedKmh: 20,
+    windDirectionDeg: 300,
+    windDirectionLabel: "Barat-Barat Laut (300°)",
+    humidityPct: 47,
+    flammabilityIndex: 0.87,
+  },
+  {
+    id: "HS-0438",
+    lat: -2.02,
+    lon: 113.21,
+    severity: "tinggi",
+    riskScore: 84.7,
+    distanceKm: 28,
+    etaMin: 44,
+    areaHa: 190,
+    dnbrMean: 0.57,
+    imagery: "FIRMS NRT 2026-10-21 06:20 UTC",
+    peatland: true,
+    settlementKm: 2.3,
+    status: "Terkonfirmasi citra (Live FIRMS)",
+    location: "Kecamatan Kamipang, Kabupaten Katingan",
+    district: "Kab. Katingan, Kalimantan Tengah",
+    fireType: "Permukaan & gambut",
+    soil: "Gambut 1-2 m",
+    lastCondition: "Klaster aktif (98 titik panas, FRP 690.0 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 98,
+    totalFrp: 690.0,
+    windSpeedKmh: 18,
+    windDirectionDeg: 320,
+    windDirectionLabel: "Barat Laut (320°)",
+    humidityPct: 49,
+    flammabilityIndex: 0.83,
+  },
+  {
+    id: "HS-0441",
+    lat: 0.12,
+    lon: 116.42,
+    severity: "tinggi",
+    riskScore: 82.5,
+    distanceKm: 31,
+    etaMin: 49,
+    areaHa: 175,
+    dnbrMean: 0.55,
+    imagery: "FIRMS NRT 2026-10-21 05:50 UTC",
+    peatland: true,
+    settlementKm: 2.5,
+    status: "Terkonfirmasi citra (Live FIRMS)",
+    location: "Kecamatan Kembang Janggut, Kab. Kutai Kartanegara",
+    district: "Kab. Kutai Kartanegara, Kalimantan Timur",
+    fireType: "Permukaan & gambut",
+    soil: "Gambut Muara Siran",
+    lastCondition: "Klaster aktif (84 titik panas, FRP 580.3 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 84,
+    totalFrp: 580.3,
+    windSpeedKmh: 17,
+    windDirectionDeg: 290,
+    windDirectionLabel: "Barat-Barat Laut (290°)",
+    humidityPct: 50,
+    flammabilityIndex: 0.80,
+  },
+  {
+    id: "HS-0444",
+    lat: 0.52,
+    lon: 101.88,
+    severity: "tinggi",
+    riskScore: 86.0,
+    distanceKm: 22,
+    etaMin: 35,
+    areaHa: 210,
+    dnbrMean: 0.60,
+    imagery: "FIRMS NRT 2026-10-21 06:40 UTC",
+    peatland: true,
+    settlementKm: 1.9,
+    status: "Terkonfirmasi citra (Live FIRMS)",
+    location: "Kecamatan Kerumutan, Kabupaten Pelalawan",
+    district: "Kab. Pelalawan, Riau",
+    fireType: "Bawah permukaan (gambut)",
+    soil: "Kubah Gambut Semenanjung Kampar",
+    lastCondition: "Klaster aktif (112 titik panas, FRP 795.4 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 112,
+    totalFrp: 795.4,
+    windSpeedKmh: 19,
+    windDirectionDeg: 335,
+    windDirectionLabel: "Utara-Barat Laut (335°)",
+    humidityPct: 48,
+    flammabilityIndex: 0.86,
+  },
+  {
+    id: "HS-0447",
+    lat: -0.42,
+    lon: 109.48,
+    severity: "tinggi",
+    riskScore: 79.8,
+    distanceKm: 25,
+    etaMin: 40,
+    areaHa: 142,
+    dnbrMean: 0.51,
+    imagery: "FIRMS NRT 2026-10-21 06:25 UTC",
+    peatland: true,
+    settlementKm: 2.1,
+    status: "Terkonfirmasi citra (Live FIRMS)",
+    location: "Kecamatan Sungai Raya, Kabupaten Kubu Raya",
+    district: "Kab. Kubu Raya, Kalimantan Barat",
+    fireType: "Permukaan & gambut",
+    soil: "Gambut Pesisir 1-3 m",
+    lastCondition: "Klaster aktif (63 titik panas, FRP 418.0 MW)",
+    satellite: "VIIRS NOAA-20",
+    hotspotCount: 63,
+    totalFrp: 418.0,
+    windSpeedKmh: 21,
+    windDirectionDeg: 315,
+    windDirectionLabel: "Barat Laut (315°)",
+    humidityPct: 49,
+    flammabilityIndex: 0.82,
+  },
+  {
+    id: "HS-0450",
+    lat: -3.65,
+    lon: 114.75,
+    severity: "sedang",
+    riskScore: 67.4,
+    distanceKm: 19,
+    etaMin: 31,
+    areaHa: 95,
+    dnbrMean: 0.44,
+    imagery: "FIRMS NRT 2026-10-21 06:10 UTC",
+    peatland: false,
+    settlementKm: 2.0,
+    status: "Perlu cek lapangan",
+    location: "Kecamatan Bati-Bati, Kabupaten Tanah Laut",
+    district: "Kab. Tanah Laut, Kalimantan Selatan",
+    fireType: "Permukaan & rawa",
+    soil: "Mineral & Rawa",
+    lastCondition: "Klaster aktif (41 titik panas, FRP 265.0 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 41,
+    totalFrp: 265.0,
+    windSpeedKmh: 18,
+    windDirectionDeg: 295,
+    windDirectionLabel: "Barat-Barat Laut (295°)",
+    humidityPct: 52,
+    flammabilityIndex: 0.69,
+  },
+  {
+    id: "HS-0453",
+    lat: -9.85,
+    lon: 120.28,
+    severity: "sedang",
+    riskScore: 66.2,
+    distanceKm: 33,
+    etaMin: 52,
+    areaHa: 128,
+    dnbrMean: 0.42,
+    imagery: "FIRMS NRT 2026-10-21 05:35 UTC",
+    peatland: false,
+    settlementKm: 3.4,
+    status: "Perlu cek lapangan",
+    location: "Kecamatan Kahaungu Eti, Kabupaten Sumba Timur",
+    district: "Kab. Sumba Timur, Nusa Tenggara Timur",
+    fireType: "Permukaan (Savana)",
+    soil: "Karst & Savana Kering",
+    lastCondition: "Klaster aktif (78 titik panas, FRP 340.8 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 78,
+    totalFrp: 340.8,
+    windSpeedKmh: 32,
+    windDirectionDeg: 280,
+    windDirectionLabel: "Barat (280°)",
+    humidityPct: 35,
+    flammabilityIndex: 0.87,
+  },
+  {
+    id: "HS-0456",
+    lat: -4.35,
+    lon: 122.15,
+    severity: "sedang",
+    riskScore: 61.8,
+    distanceKm: 29,
+    etaMin: 46,
+    areaHa: 88,
+    dnbrMean: 0.40,
+    imagery: "FIRMS NRT 2026-10-21 05:30 UTC",
+    peatland: false,
+    settlementKm: 3.1,
+    status: "Perlu cek lapangan",
+    location: "Kecamatan Tinanggea, Kabupaten Konawe Selatan",
+    district: "Kab. Konawe Selatan, Sulawesi Tenggara",
+    fireType: "Permukaan (Savana)",
+    soil: "Mineral Savana",
+    lastCondition: "Klaster aktif (46 titik panas, FRP 215.6 MW)",
+    satellite: "VIIRS NOAA-20",
+    hotspotCount: 46,
+    totalFrp: 215.6,
+    windSpeedKmh: 23,
+    windDirectionDeg: 290,
+    windDirectionLabel: "Barat-Barat Laut (290°)",
+    humidityPct: 44,
+    flammabilityIndex: 0.74,
+  },
+  {
+    id: "HS-0459",
+    lat: 2.82,
+    lon: 117.36,
+    severity: "rendah",
+    riskScore: 28.5,
+    distanceKm: 38,
+    etaMin: 59,
+    areaHa: 42,
+    dnbrMean: 0.31,
+    imagery: "FIRMS NRT 2026-10-21 05:45 UTC",
+    peatland: false,
+    settlementKm: 5.4,
+    status: "Pantauan satelit NRT",
+    location: "Kecamatan Tanjung Palas, Kabupaten Bulungan",
+    district: "Kab. Bulungan, Kalimantan Utara",
+    fireType: "Permukaan",
+    soil: "Mineral & Aluvial",
+    lastCondition: "Klaster aktif (14 titik panas, FRP 82.0 MW)",
+    satellite: "VIIRS S-NPP",
+    hotspotCount: 14,
+    totalFrp: 82.0,
+    windSpeedKmh: 12,
+    windDirectionDeg: 35,
+    windDirectionLabel: "Timur Laut (35°)",
+    humidityPct: 60,
+    flammabilityIndex: 0.49,
+  },
 ];
 
 const COMPASS_ID = [
@@ -1431,6 +1711,148 @@ export function buildIndonesianSettlementZones(
       bufferPositions,
     };
   });
+}
+
+export interface RawHotspotPointLike {
+  latitude: number;
+  longitude: number;
+  acq_date: string;
+  acq_time: string;
+  confidence: string;
+  frp: number;
+  satellite: string;
+  brightness?: number | null;
+}
+
+/**
+ * Convert a raw satellite thermal anomaly point into a full interactive Hotspot object
+ * so clicking any small fire on the map displays its DINOv3 burn zones, tactical perimeter
+ * allocation plan, and detail card.
+ */
+export function rawPointToHotspot(
+  pt: RawHotspotPointLike,
+  idx: number,
+  referenceHotspots: Hotspot[] = SAMPLE_HOTSPOTS
+): Hotspot {
+  const lat = Number(pt.latitude);
+  const lon = Number(pt.longitude);
+  const frp = Math.max(2.5, Number(pt.frp ?? 15.0));
+  const conf = String(pt.confidence ?? "nominal").toLowerCase();
+
+  const refs = referenceHotspots.length > 0 ? referenceHotspots : SAMPLE_HOTSPOTS;
+  let nearestRef = refs[0];
+  let minRefKm = Infinity;
+  for (const r of refs) {
+    const d = haversineKm([lat, lon], [r.lat, r.lon]);
+    if (d < minRefKm) {
+      minRefKm = d;
+      nearestRef = r;
+    }
+  }
+
+  let nearestStl = INDONESIAN_SETTLEMENTS[0];
+  let minStlKm = Infinity;
+  for (const s of INDONESIAN_SETTLEMENTS) {
+    const d = haversineKm([lat, lon], [s.lat, s.lon]);
+    if (d < minStlKm) {
+      minStlKm = d;
+      nearestStl = s;
+    }
+  }
+
+  const useRefContext = Boolean(nearestRef && minRefKm <= 140);
+  const peatland = useRefContext
+    ? Boolean(nearestRef.peatland)
+    : (-3.6 <= lat && lat <= 0.5 && 109.5 <= lon && lon <= 116.5) ||
+      (-4.2 <= lat && lat <= 2.2 && 100.2 <= lon && lon <= 106.0) ||
+      (-8.8 <= lat && lat <= -6.0 && 138.0 <= lon && lon <= 141.0);
+
+  const soil = useRefContext
+    ? nearestRef.soil
+    : peatland
+    ? "Gambut Tropis 1-3 m"
+    : "Tanah Mineral & Savana";
+  const fireType = useRefContext
+    ? nearestRef.fireType
+    : peatland
+    ? "Permukaan & gambut"
+    : "Permukaan";
+
+  const baseLocationName = useRefContext
+    ? nearestRef.location.split(",")[0]
+    : nearestStl.name;
+  const district = useRefContext
+    ? nearestRef.district ?? nearestStl.province
+    : nearestStl.province;
+
+  const severity: Severity =
+    frp >= 28 || conf === "high" || conf === "h"
+      ? "tinggi"
+      : frp >= 12 || conf === "nominal" || conf === "n"
+      ? "sedang"
+      : "rendah";
+
+  const areaHa = Math.max(14, Math.round(12 + frp * 2.1 + (peatland ? 16 : 0)));
+  const dnbrMean = Number(
+    Math.min(0.78, Math.max(0.24, 0.24 + frp / 130 + (peatland ? 0.08 : 0))).toFixed(2)
+  );
+  const settlementKm = Number(Math.max(0.9, Math.min(12.5, minStlKm * 0.18 + 1.1)).toFixed(1));
+  const distanceKm = Math.max(9, Math.min(65, Math.round(minStlKm * 0.35 + 10)));
+  const etaMin = Math.max(16, Math.round(distanceKm * 1.55));
+  const riskScore = Number(
+    Math.min(
+      94.0,
+      Math.max(
+        26.0,
+        (severity === "tinggi" ? 62 : severity === "sedang" ? 44 : 28) +
+          Math.min(22, frp * 0.45) +
+          (peatland ? 9 : 0)
+      )
+    ).toFixed(1)
+  );
+
+  const acqTime = String(pt.acq_time || "0630").padStart(4, "0");
+  const acqDate = pt.acq_date || "2026-10-21";
+  const satRaw = String(pt.satellite || "VIIRS S-NPP");
+  const satLabel =
+    satRaw === "N"
+      ? "VIIRS S-NPP"
+      : satRaw === "N20"
+      ? "VIIRS NOAA-20"
+      : satRaw;
+
+  const latTag = Math.abs(Math.round(lat * 10000));
+  const lonTag = Math.abs(Math.round(lon * 10000));
+
+  return {
+    id: `HS-RAW-${latTag}-${lonTag}`,
+    lat,
+    lon,
+    severity,
+    riskScore,
+    distanceKm,
+    etaMin,
+    areaHa,
+    dnbrMean,
+    imagery: `FIRMS NRT ${acqDate} ${acqTime.slice(0, 2)}:${acqTime.slice(2, 4)} UTC`,
+    peatland,
+    settlementKm,
+    status:
+      conf === "high" || conf === "h"
+        ? "Terkonfirmasi citra (Live FIRMS)"
+        : "Pantauan satelit NRT (Titik Aktif)",
+    location: `${baseLocationName} (Titik #${idx + 1})`,
+    district,
+    fireType,
+    soil,
+    lastCondition: `Titik panas aktif (FRP ${frp.toFixed(1)} MW, Conf ${conf.toUpperCase()})`,
+    satellite: satLabel,
+    hotspotCount: 1,
+    totalFrp: Number(frp.toFixed(1)),
+    acqDate,
+    acqTime,
+    isLive: true,
+  };
 }
 
 export function rankHotspots(hotspots: Hotspot[]): Hotspot[] {

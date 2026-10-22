@@ -11,11 +11,13 @@ COPY package.json package-lock.json* ./
 # Install npm dependencies
 RUN npm install
 
-# Copy application code
+# Copy application code and build production Next.js bundle
 COPY . .
+RUN npm run build
 
-ENV PORT=3000
+ENV NODE_ENV=production
+ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
-EXPOSE 3000
+EXPOSE 8080
 
-CMD ["npm", "run", "dev"]
+CMD ["sh", "-c", "npx next start -H 0.0.0.0 -p ${PORT:-8080}"]

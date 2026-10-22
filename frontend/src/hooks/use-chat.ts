@@ -95,6 +95,9 @@ export function useChat() {
   const [activeCluster, setActiveCluster] = useState<Hotspot | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
   const isExecutingRef = useRef(false);
+  const sessionIdRef = useRef<string>(`inv-session-${Date.now()}`);
+  const lastRegionRef = useRef<string>("Kalimantan");
+
 
   // Initialize timeline and decision logs from live NASA FIRMS + AWS STAC + DINOv3 baseline
   useEffect(() => {
@@ -255,13 +258,155 @@ export function useChat() {
     setDecisionLogs([]);
 
     try {
-      const inv = await startInvestigation(content);
-      const chatPromise = sendChatMessage(content, inv?.id);
+      const chatPromise = sendChatMessage(content, sessionIdRef.current);
       const clientRegion = extractClientRegion(content);
-      const regionName =
+
+      // Quick check: if query has no clientRegion and might be blocked by backend guardrail, await chatRes first
+      const qLowerCheck = content.toLowerCase();
+      const looksOffTopic =
+        [
+          "resep",
+          "masak",
+          "kuliner",
+          "nasi goreng",
+          "hotel murah",
+          "tiket pesawat",
+          "bioskop",
+          "lagu",
+          "sepak bola",
+          "kripto",
+          "crypto",
+          "bitcoin",
+          "buatkan kode",
+          "tulis kode",
+          "write code",
+          "javascript",
+          "leetcode",
+          "kalkulus",
+          "puisi",
+          "cerpen",
+          "lelucon",
+          "zodiak",
+          "ignore previous",
+          "abaikan instruksi",
+        ].some((kw) => qLowerCheck.includes(kw)) ||
+        (!clientRegion &&
+          ![
+            "api",
+            "kebakaran",
+            "karhutla",
+            "hotspot",
+            "titik",
+            "asap",
+            "gambut",
+            "hutan",
+            "lahan",
+            "satelit",
+            "firms",
+            "sentinel",
+            "stac",
+            "dnbr",
+            "dinov3",
+            "risiko",
+            "prioritas",
+            "pemadam",
+            "manggala",
+            "bpbd",
+            "drone",
+            "pos-",
+            "udp-",
+            "taktis",
+            "perimeter",
+            "sekat",
+            "air",
+            "rute",
+            "evakuasi",
+            "permukiman",
+            "wilayah",
+            "daerah",
+            "lokasi",
+            "peta",
+            "radius",
+            "hektare",
+            "angin",
+            "cuaca",
+            "kerugian",
+            "rugi",
+            "biaya",
+            "dampak",
+            "ekonomi",
+            "emisi",
+            "karbon",
+            "dibiarkan",
+            "pantau",
+            "investigasi",
+            "analisis",
+            "status",
+            "kondisi",
+            "laporan",
+            "siaga",
+            "darurat",
+            "bahaya",
+            "aman",
+            "wildfire",
+            "fire",
+            "burn",
+            "smoke",
+            "dispatch",
+            "sigap",
+          ].some((kw) => qLowerCheck.includes(kw)));
+
+      if (looksOffTopic) {
+        const guardrailRes = await chatPromise;
+        if (!guardrailRes || guardrailRes.model_used === "sigap-domain-guardrail") {
+          const nowStr = new Date().toLocaleTimeString("id-ID");
+          setCurrentSteps([
+            {
+              id: "step-guardrail",
+              title: "Guardrail Domain & Validasi Konteks Karhutla",
+              description:
+                "Permintaan dihentikan: di luar cakupan operasional pemadaman & intelijen karhutla SIGAP.",
+              status: "completed",
+              timestamp: nowStr,
+            },
+          ]);
+          setDecisionLogs([
+            {
+              id: "log-guardrail-" + Date.now(),
+              step: "SIGAP Domain Guardrail",
+              decision: "Menolak eksekusi sub-agen & pemindaian satelit (Out-of-Scope Query).",
+              reasoning:
+                "Pertanyaan pengguna tidak berkaitan dengan deteksi titik panas, analisis cuaca/gambut, valuasi dampak kebakaran, atau alokasi taktis pemadaman.",
+              timestamp: nowStr,
+            },
+          ]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: "msg-reply-" + Date.now(),
+              role: "agent",
+              content:
+                guardrailRes?.response ||
+                "### 🛡️ di Luar Fokus Operasional Karhutla (Domain Guardrail)\n\nMaaf, **SIGAP Wildfire Response Orchestrator** hanya melayani instruksi yang berkaitan dengan **pemantauan kebakaran hutan dan lahan (karhutla)**, telemetri satelit, analisis cuaca/gambut, valuasi dampak kebakaran, serta pengerahan taktis tim pemadam.",
+              timestamp: new Date().toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            },
+          ]);
+          return;
+        }
+      }
+
+      const inv = await startInvestigation(content);
+      const explicitRegion =
         inv?.region && inv.region !== "Indonesia"
           ? inv.region
-          : clientRegion || inv?.region || "Indonesia";
+          : clientRegion;
+      if (explicitRegion) {
+        lastRegionRef.current = explicitRegion;
+      }
+      const regionName = explicitRegion || lastRegionRef.current || "Indonesia";
       const liveFeed = await fetchMonitoringHotspots(regionName, 5);
       const topHotspot = liveFeed.hotspots[0];
       const hasFires = liveFeed.total_raw_hotspots > 0 && Boolean(topHotspot);
