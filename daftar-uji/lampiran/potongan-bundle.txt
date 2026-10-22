@@ -1,3 +1,0 @@
-# Potongan bundle produksi (12 chunk JS diunduh 2026-10-22T02:03:20Z)
-# Logika penentuan alamat API:
-_=t(5704).env.NEXT_PUBLIC_API_URL||("localhost"!==window.location.hostname&&"127.0.0.1"!==window.location.hostname?"":"http://localhost:8000")
