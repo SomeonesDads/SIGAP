@@ -74,10 +74,10 @@ export function LocationSearch({
       )
       .map((h) => ({ kind: "hotspot", key: `hs-${h.id}`, hotspot: h }));
 
-    const presetHits: Result[] = PLACES.filter((p) =>
+    const presetHits = PLACES.filter((p) =>
       p.name.toLowerCase().includes(q)
     ).map((p) => ({
-      kind: "place",
+      kind: "place" as const,
       key: `preset-${p.name}`,
       place: p,
     }));

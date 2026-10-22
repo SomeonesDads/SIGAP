@@ -54,6 +54,7 @@ __all__ = [
     "score_hotspot_priority",
     "rank_all_active_hotspots",
     "explain_priority",
+    "evaluate_fire_impact_loss",
     "optimize_team_assignments",
     "estimate_travel_time",
     "find_nearest_water_sources",
@@ -77,7 +78,7 @@ def __getattr__(name: str) -> Any:
         from agent.tools import geospatial_tool
 
         return getattr(geospatial_tool, name)
-    if name in ("score_hotspot_priority", "rank_all_active_hotspots", "explain_priority"):
+    if name in ("score_hotspot_priority", "rank_all_active_hotspots", "explain_priority", "evaluate_fire_impact_loss"):
         from agent.tools import priority_tool
 
         return getattr(priority_tool, name)

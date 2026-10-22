@@ -14,10 +14,18 @@ Agent Hierarchy:
 """
 
 from functools import cached_property
+import json
+import logging
+import os
+from typing import Any
 
+from dotenv import load_dotenv
 from google.adk.agents import LlmAgent
 from google.adk.models import Gemini
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 from google.genai import Client
+from google.genai import types as genai_types
 from google.adk.tools import agent_tool
 from google.adk.tools.google_search_tool import GoogleSearchTool
 from google.adk.tools import url_context
@@ -33,7 +41,7 @@ from agent.prompts.instructions import (
     VERIFICATION_INSTRUCTION,
 )
 
-# Custom ADK Domain Tool Wrappers
+# Custom ADK Domain Tool Wrappers (14 tools)
 from agent.tools.firms_tool import fetch_hotspots
 from agent.tools.earth_engine_tool import fetch_satellite_imagery, assess_image_quality
 from agent.tools.unet_tool import segment_burned_area
@@ -46,6 +54,7 @@ from agent.tools.priority_tool import (
     score_hotspot_priority,
     rank_all_active_hotspots,
     explain_priority,
+    evaluate_fire_impact_loss,
 )
 from agent.tools.dispatch_tool import (
     optimize_team_assignments,
@@ -53,22 +62,45 @@ from agent.tools.dispatch_tool import (
     find_nearest_water_sources,
 )
 
+load_dotenv()
+logger = logging.getLogger("SIGAP.Agent.Orchestrator")
+
 
 class GlobalGemini(Gemini):
-  """Pins the Vertex AI client to the `global` location.
+  """Configures the Vertex AI Gemini client with explicit GCP project and ADC/Service Account credentials."""
 
-  gemini-3 series models are only served from `global`; the default ADK
-  `Gemini` integration constructs a `google.genai.Client` whose location
-  defaults to the AgentEngine instance's region (e.g. `us-central1`) and
-  fails with model-not-found for these models. Subclassing per the override
-  pattern documented on `google.adk.models.google_llm.Gemini` lets the agent
-  keep running in its regional AgentEngine instance while routing the model
-  request to the global endpoint.
-  """
+  model: str = "gemini-2.5-flash"
+
+  def model_post_init(self, __context: Any) -> None:
+    super().model_post_init(__context)
+    if self.model == "gemini-3.5-flash":
+      object.__setattr__(self, "model", os.getenv("ADK_GEMINI_MODEL", "gemini-2.5-flash"))
 
   @cached_property
   def api_client(self) -> Client:
-    return Client(vertexai=True, location="global")
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() or "hackathon-primestep-04"
+    location = os.getenv("VERTEX_ADK_LOCATION", "").strip() or (
+        "global" if self.model.startswith("gemini-3") else "us-central1"
+    )
+    sa_json_raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON", "").strip()
+    if sa_json_raw:
+      try:
+        from google.oauth2 import service_account
+
+        sa_info = json.loads(sa_json_raw)
+        creds = service_account.Credentials.from_service_account_info(
+            sa_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        return Client(
+            vertexai=True,
+            project=sa_info.get("project_id") or project_id,
+            location=location,
+            credentials=creds,
+        )
+      except Exception as exc:
+        logger.debug("Fallback to standard ADC in GlobalGemini: %s", exc)
+
+    return Client(vertexai=True, project=project_id, location=location)
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +109,7 @@ class GlobalGemini(Gemini):
 
 perception___fusion_agent_google_search_agent = LlmAgent(
   name='Perception___Fusion_Agent_google_search_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Agent specialized in performing Google searches for wildfire, hotspot, and meteorological reports.'
   ),
@@ -89,7 +121,7 @@ perception___fusion_agent_google_search_agent = LlmAgent(
 )
 perception___fusion_agent_url_context_agent = LlmAgent(
   name='Perception___Fusion_Agent_url_context_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Agent specialized in fetching wildfire and environmental content from URLs.'
   ),
@@ -106,7 +138,7 @@ perception___fusion_agent_url_context_agent = LlmAgent(
 
 perception_fusion = LlmAgent(
   name='perception_fusion',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Menyatukan data titik panas dari berbagai sumber (FIRMS, Sipongi, BMKG) dan menilai probabilitas kebakaran nyata.'
   ),
@@ -127,9 +159,9 @@ perception_fusion = LlmAgent(
 
 risk_scoring = LlmAgent(
   name='risk_scoring',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
-      'Menghitung skor prioritas dinamis berdasarkan jenis lahan, arah angin, histori kebakaran, dan jarak ke pemukiman.'
+      'Menghitung skor prioritas dinamis berdasarkan jenis lahan, arah angin, histori kebakaran, jarak ke pemukiman, dan valuasi dampak.'
   ),
   sub_agents=[],
   instruction=f"{RISK_SCORING_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
@@ -138,6 +170,7 @@ risk_scoring = LlmAgent(
     rank_all_active_hotspots,
     explain_priority,
     overlay_risk_layers,
+    evaluate_fire_impact_loss,
   ],
 )
 
@@ -147,7 +180,7 @@ risk_scoring = LlmAgent(
 
 verification_agent = LlmAgent(
   name='verification_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Menilai dan memutuskan perlunya verifikasi pendahuluan (drone, citra satelit resolusi tinggi, atau warga) sebelum tim darat dikirim.'
   ),
@@ -166,7 +199,7 @@ verification_agent = LlmAgent(
 
 routing___dispatch_agent_google_search_agent = LlmAgent(
   name='Routing___Dispatch_Agent_google_search_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Agent specialized in performing Google searches for road access, terrain, and firefighting logistics.'
   ),
@@ -178,7 +211,7 @@ routing___dispatch_agent_google_search_agent = LlmAgent(
 )
 routing_dispatch = LlmAgent(
   name='routing_dispatch',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Mengoptimalkan penugasan banyak tim ke banyak titik api berdasarkan akses medan riil dan ketersediaan sumber air.'
   ),
@@ -198,7 +231,7 @@ routing_dispatch = LlmAgent(
 
 coordination_agent = LlmAgent(
   name='coordination_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Menyusun komunikasi operasional lapangan, memantau pembaruan ETA, dan mengidentifikasi eskalasi darurat bagi pengambil keputusan.'
   ),
@@ -216,15 +249,16 @@ coordination_agent = LlmAgent(
 
 feedback_learning = LlmAgent(
   name='feedback_learning',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
-      'Mengevaluasi akurasi keputusan pasca-insiden untuk memperbarui bobot penilaian dan meningkatkan performa sistem di masa mendatang.'
+      'Mengevaluasi akurasi keputusan pasca-insiden dan menghitung valuasi kerugian ekonomi/ekologis untuk memperbarui bobot sistem.'
   ),
   sub_agents=[],
   instruction=f"{FEEDBACK_LEARNING_INSTRUCTION}\n\n{DOMAIN_GUARDRAIL_INSTRUCTION}",
   tools=[
     score_hotspot_priority,
     compute_burned_area,
+    evaluate_fire_impact_loss,
   ],
 )
 
@@ -234,7 +268,7 @@ feedback_learning = LlmAgent(
 
 wildfire_response_orchestrator_google_search_agent = LlmAgent(
   name='Wildfire_Response_Orchestrator_google_search_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Agent specialized in performing Google searches for wildfire and disaster context.'
   ),
@@ -246,7 +280,7 @@ wildfire_response_orchestrator_google_search_agent = LlmAgent(
 )
 wildfire_response_orchestrator_url_context_agent = LlmAgent(
   name='Wildfire_Response_Orchestrator_url_context_agent',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Agent specialized in fetching wildfire and disaster content from URLs.'
   ),
@@ -258,16 +292,117 @@ wildfire_response_orchestrator_url_context_agent = LlmAgent(
 )
 root_agent = LlmAgent(
   name='Wildfire_Response_Orchestrator',
-  model=GlobalGemini(model='gemini-3.5-flash'),
+  model=GlobalGemini(model='gemini-2.5-flash'),
   description=(
       'Mengorkestrasi seluruh alur respons penanggulangan karhutla dan mendelegasikan tugas ke 6 sub-agent spesialis.'
   ),
   sub_agents=[perception_fusion, risk_scoring, verification_agent, routing_dispatch, coordination_agent, feedback_learning],
   instruction=ORCHESTRATOR_INSTRUCTION,
   tools=[
+    fetch_hotspots,
+    score_hotspot_priority,
+    evaluate_fire_impact_loss,
+    optimize_team_assignments,
     agent_tool.AgentTool(agent=wildfire_response_orchestrator_google_search_agent),
-    agent_tool.AgentTool(agent=wildfire_response_orchestrator_url_context_agent)
+    agent_tool.AgentTool(agent=wildfire_response_orchestrator_url_context_agent),
   ],
 )
+
+# ---------------------------------------------------------------------------
+# Live Google ADK Session & Runner Singleton for Backend Integration
+# ---------------------------------------------------------------------------
+
+_ADK_APP_NAME = "sigap_wildfire_orchestrator"
+_adk_session_service = InMemorySessionService()
+_adk_runner = Runner(
+    agent=root_agent,
+    app_name=_ADK_APP_NAME,
+    session_service=_adk_session_service,
+)
+
+
+async def run_adk_orchestrator_chat(
+    session_id: str,
+    user_message: str,
+    telemetry_context: str = "",
+    user_id: str = "sigap-commander",
+) -> dict[str, Any]:
+  """Execute a live turn through the Google ADK root_agent (Runner + InMemorySessionService).
+
+  Tracks sub-agents invoked and ADK tools called during the multi-agent execution trace.
+  """
+  from google.adk.agents.run_config import RunConfig
+
+  clean_session_id = (session_id or "inv-live-session").strip()
+  existing = await _adk_session_service.get_session(
+      app_name=_ADK_APP_NAME,
+      user_id=user_id,
+      session_id=clean_session_id,
+  )
+  if existing is None:
+    await _adk_session_service.create_session(
+        app_name=_ADK_APP_NAME,
+        user_id=user_id,
+        session_id=clean_session_id,
+    )
+
+  if telemetry_context:
+    combined_prompt = (
+        f"PERTANYAAN PENGGUNA: {user_message}\n\n"
+        "INSTRUKSI EKSEKUSI CEPAT ADK:\n"
+        "- Data telemetri satelit live (FIRMS, STAC Sentinel-2, DINOv3 BurnSeg, MCDA, Valuasi Kerugian, & 5 Sektor Taktis POS-1..POS-4/UDP-1) sudah tersedia di bawah.\n"
+        "- WAJIB panggil tepat 1 tool ADK yang paling relevan dengan pertanyaan pengguna (`evaluate_fire_impact_loss` untuk kerugian/dampak, `score_hotspot_priority` untuk risiko/prioritas, atau `optimize_team_assignments` untuk alokasi taktis) tanpa transfer berantai ke sub-agent lain, lalu susun jawaban akhir komprehensif dalam Bahasa Indonesia.\n\n"
+        f"[KONTEKS TELEMETRI SATELIT & SEKTOR TAKTIS LIVE SAAT INI]:\n{telemetry_context}"
+    )
+  else:
+    combined_prompt = (
+        f"PERTANYAAN PENGGUNA: {user_message}\n\n"
+        "INSTRUKSI EKSEKUSI CEPAT ADK: Panggil maksimal 1-2 tool yang paling relevan (misalnya `fetch_hotspots`, `score_hotspot_priority`, `evaluate_fire_impact_loss`, atau `optimize_team_assignments`) langsung dari orkestrator lalu berikan laporan komprehensif dalam Bahasa Indonesia tanpa melakukan transfer sub-agent berulang."
+    )
+
+  content = genai_types.Content(
+      role="user",
+      parts=[genai_types.Part.from_text(text=combined_prompt)],
+  )
+
+  agents_invoked: list[str] = []
+  tools_called: list[str] = []
+  final_texts: list[str] = []
+  all_texts: list[str] = []
+
+  run_cfg = RunConfig(max_llm_calls=4)
+
+  async for event in _adk_runner.run_async(
+      user_id=user_id,
+      session_id=clean_session_id,
+      new_message=content,
+      run_config=run_cfg,
+  ):
+    author = getattr(event, "author", None)
+    if author and author not in agents_invoked:
+      agents_invoked.append(str(author))
+
+    evt_content = getattr(event, "content", None)
+    parts = getattr(evt_content, "parts", None) or []
+    for part in parts:
+      fn_call = getattr(part, "function_call", None)
+      if fn_call and getattr(fn_call, "name", None):
+        fn_name = str(fn_call.name)
+        if fn_name not in tools_called:
+          tools_called.append(fn_name)
+      txt = getattr(part, "text", None)
+      if txt and str(txt).strip():
+        all_texts.append(str(txt).strip())
+        if hasattr(event, "is_final_response") and event.is_final_response():
+          final_texts.append(str(txt).strip())
+
+  response_text = "\n\n".join(final_texts).strip() if final_texts else ("\n\n".join(all_texts[-1:]).strip())
+  return {
+      "response": response_text,
+      "agents_invoked": agents_invoked or ["Wildfire_Response_Orchestrator"],
+      "tools_called": tools_called,
+      "model_used": f"google-adk/{root_agent.model.model if isinstance(root_agent.model, GlobalGemini) else 'gemini-2.5-flash'}",
+  }
+
 
 

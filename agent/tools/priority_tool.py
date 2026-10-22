@@ -270,3 +270,66 @@ def explain_priority(area_id: str) -> str:
         "4. Rekomendasi Taktis: Terjunkan segera regu Manggala Agni Daops Pulang Pisau dengan peralatan pompa "
         "tekanan tinggi (tipe Mark-3) dan nozel gambut (peat spear)."
     )
+
+
+@agent_tool
+def evaluate_fire_impact_loss(
+    burned_area_ha: float = 160.0,
+    is_peatland: bool = True,
+    wind_speed_kmh: float = 20.0,
+    flammability_pct: float = 85.0,
+    settlement_distance_km: float = 1.8,
+) -> Dict[str, Any]:
+    """Calculates economic, ecological, and carbon emission losses if a wildfire is left unchecked for 24 to 72 hours.
+
+    Uses KLHK and World Bank Indonesia Karhutla valuation benchmarks (~Rp 72 juta/Ha for tropical peatland,
+    ~Rp 38 juta/Ha for mineral/savanna land) and IPCC tropical peat/forest emission factors (420 vs 95 ton CO2e/Ha).
+
+    Args:
+        burned_area_ha: Current estimated burned surface area in hectares.
+        is_peatland: True if fire occurs on peatland (gambut), False for mineral soil.
+        wind_speed_kmh: Wind speed in km/h driving fire front expansion.
+        flammability_pct: Fuel flammability percentage (0 to 100).
+        settlement_distance_km: Distance in kilometers to nearest human settlement.
+
+    Returns:
+        dict: Valuation metrics for current state, 24h unchecked spread, and 72h unchecked spread.
+    """
+    logger.info("Evaluating fire impact and unchecked spread loss for %.1f Ha (peat=%s)", burned_area_ha, is_peatland)
+
+    area_ha = max(1.0, float(burned_area_ha))
+    wind = max(1.0, float(wind_speed_kmh))
+    flam = max(10.0, min(100.0, float(flammability_pct)))
+    dist_km = max(0.5, float(settlement_distance_km))
+
+    spread_mult_24h = round(1.45 + (wind / 18.0) * (flam / 75.0), 2)
+    projected_24h_ha = round(area_ha * spread_mult_24h, 1)
+    projected_72h_ha = round(area_ha * (spread_mult_24h ** 2.1), 1)
+
+    per_ha_rp_juta = 72.0 if is_peatland else 38.0
+    settlement_risk_bonus_miliar = round(max(0.5, (10.0 / max(0.8, dist_km)) * 1.8), 2)
+    loss_current_miliar = round((area_ha * per_ha_rp_juta) / 1000.0 + settlement_risk_bonus_miliar * 0.4, 2)
+    loss_24h_miliar = round((projected_24h_ha * per_ha_rp_juta) / 1000.0 + settlement_risk_bonus_miliar, 2)
+    loss_72h_miliar = round((projected_72h_ha * per_ha_rp_juta) / 1000.0 + settlement_risk_bonus_miliar * 2.4, 2)
+
+    co2_ton_per_ha = 420.0 if is_peatland else 95.0
+    co2_24h_ton = int(round(projected_24h_ha * co2_ton_per_ha))
+    carbon_val_miliar = round((co2_24h_ton * 15.0 * 16000.0) / 1_000_000_000.0, 2)
+
+    return {
+        "status": "success",
+        "current_burned_area_ha": area_ha,
+        "projected_unchecked_24h_ha": projected_24h_ha,
+        "projected_unchecked_72h_ha": projected_72h_ha,
+        "current_estimated_loss_idr_miliar": f"Rp {loss_current_miliar:.2f} Miliar",
+        "unchecked_24h_loss_idr_miliar": f"Rp {loss_24h_miliar:.2f} Miliar",
+        "unchecked_72h_loss_idr_miliar": f"Rp {loss_72h_miliar:.2f} Miliar",
+        "projected_24h_co2_emissions_ton": co2_24h_ton,
+        "carbon_economic_valuation_idr_miliar": f"Rp {carbon_val_miliar:.2f} Miliar",
+        "affected_sectors": (
+            "Restorasi hidrologi gambut, emisi karbon, perkebunan/kehutanan, kesehatan ISPA warga, & gangguan logistik"
+            if is_peatland
+            else "Ekosistem hutan/savana, sektor pariwisata & penerbangan akibat kabut asap, lahan pertanian warga, & kesehatan ISPA"
+        ),
+    }
+

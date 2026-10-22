@@ -170,6 +170,7 @@ export function MonitorDashboard({
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(
     () => new Set(["hotspots", "segmentation", "dnbr", "peatland", "settlement"])
   );
+  const [autoPopupsOnZoom, setAutoPopupsOnZoom] = useState(true);
 
   // Mobile responsive view & collapsible overlays
   const [mobileView, setMobileView] = useState<MobileWorkspaceView>("split");
@@ -397,7 +398,7 @@ export function MonitorDashboard({
   const onMapSelect = useCallback(
     (hotspot: Hotspot | null) => {
       if (hotspot) {
-        focusHotspot(hotspot, 0);
+        focusHotspot(hotspot, 10);
       } else {
         setSelectedId(null);
         setSelectedCustomHotspot(null);
@@ -409,7 +410,8 @@ export function MonitorDashboard({
   const focusPlace = useCallback((place: Place) => {
     setSelectedId(null);
     setSelectedCustomHotspot(null);
-    mapRef.current?.flyTo([place.lat, place.lon], place.zoom, { duration: 0.8 });
+    const targetZoom = place.name === "Indonesia" ? place.zoom : Math.max(8, place.zoom);
+    mapRef.current?.flyTo([place.lat, place.lon], targetZoom, { duration: 0.8 });
   }, []);
 
   const toggleSeverity = (severity: Severity) => {
@@ -815,6 +817,7 @@ export function MonitorDashboard({
                 rawHotspots={rawHotspots}
                 segmentation={segmentation}
                 spatialContext={spatialContext}
+                autoPopupsOnZoom={autoPopupsOnZoom}
               />
             </div>
 
@@ -879,6 +882,25 @@ export function MonitorDashboard({
                       </button>
                     );
                   })}
+                  <button
+                    type="button"
+                    onClick={() => setAutoPopupsOnZoom((v) => !v)}
+                    title="Tampilkan otomatis semua popup zona DINOv3 & sektor taktis saat zoom-in (tanpa perlu klik satu per satu)"
+                    className={cn(
+                      "flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-all",
+                      autoPopupsOnZoom
+                        ? "border-indigo-500/40 bg-indigo-500/15 text-indigo-900"
+                        : "border-slate-200 bg-slate-50 text-slate-400 opacity-60 hover:opacity-90"
+                    )}
+                  >
+                    <Sparkles className="size-3 text-indigo-600" />
+                    <span>Auto-Popup Zona</span>
+                    {autoPopupsOnZoom ? (
+                      <Eye className="size-2.5 opacity-75" />
+                    ) : (
+                      <EyeOff className="size-2.5 opacity-50" />
+                    )}
+                  </button>
                 </div>
               </div>
             </div>

@@ -22,6 +22,7 @@ except ImportError:
     from api.routes.hotspot import extract_region_from_query, get_monitoring_hotspots
     from services.investigation_service import InvestigationService
 
+from agent.agent import root_agent, run_adk_orchestrator_chat
 from data.earth_engine.client import search_aws_stac_sentinel2
 from data.firms.client import FIRMSClient
 from ml.dinov3.predict import predict_dinov3_severity_zones
@@ -44,12 +45,20 @@ class ChatMessageRequest(BaseModel):
 
 
 class ChatMessageResponse(BaseModel):
-    """Response returned by the multi-agent system."""
+    """Response returned by the Google ADK multi-agent system."""
 
-    response: str = Field(..., description="Synthesized response from Vertex AI Gemini 2.5 Flash orchestrator")
+    response: str = Field(..., description="Synthesized response from Google ADK Wildfire Response Orchestrator")
     investigation_id: str = Field(..., description="ID of the investigation associated with this session")
-    model_used: str = Field(default="vertex-ai/gemini-2.5-flash", description="LLM model identifier")
-    is_live_llm: bool = Field(default=True, description="True if generated live by Vertex AI Gemini via ADC")
+    model_used: str = Field(default="google-adk/gemini-2.5-flash", description="LLM model identifier")
+    is_live_llm: bool = Field(default=True, description="True if generated live by Google ADK & Vertex AI Gemini via ADC")
+    agents_invoked: list[str] = Field(
+        default_factory=lambda: ["Wildfire_Response_Orchestrator"],
+        description="List of Google ADK agents invoked during orchestration",
+    )
+    tools_called: list[str] = Field(
+        default_factory=list,
+        description="List of ADK tools executed during orchestration",
+    )
 
 
 def _get_vertex_access_token() -> tuple[str | None, str]:
@@ -463,6 +472,27 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
             f"{nat_top.get('hotspotCount', 281)} titik panas dan FRP {nat_top.get('totalFrp', 1996.1)} MW."
         )
 
+        # Invoke Google ADK Root Orchestrator (Wildfire_Response_Orchestrator) first
+        try:
+            adk_zero = await run_adk_orchestrator_chat(
+                session_id=inv_id,
+                user_message=payload.message,
+                telemetry_context=system_instruction,
+            )
+            adk_zero_text = str(adk_zero.get("response", "")).strip()
+            if adk_zero_text:
+                _record_session_turn(inv_id, payload.message, adk_zero_text)
+                return ChatMessageResponse(
+                    response=adk_zero_text,
+                    investigation_id=inv_id,
+                    model_used=str(adk_zero.get("model_used", "google-adk/gemini-2.5-flash")),
+                    is_live_llm=True,
+                    agents_invoked=list(adk_zero.get("agents_invoked", [root_agent.name])),
+                    tools_called=list(adk_zero.get("tools_called", ["fetch_hotspots"])),
+                )
+        except Exception as adk_exc:
+            logger.warning("Google ADK orchestrator error (0-hotspot branch): %s", adk_exc)
+
         token, project_id = _get_vertex_access_token()
         if token:
             vertex_url = (
@@ -492,6 +522,8 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
                                     investigation_id=inv_id,
                                     model_used="vertex-ai/gemini-2.5-flash",
                                     is_live_llm=True,
+                                    agents_invoked=[root_agent.name, "perception_fusion"],
+                                    tools_called=["fetch_hotspots"],
                                 )
             except Exception as exc:
                 logger.warning("Vertex AI call error (0-hotspot branch): %s", exc)
@@ -704,6 +736,27 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         f"- Konteks Klaster Sekitar: {json.dumps(clusters_summary, ensure_ascii=False)}"
     )
 
+    # 5. Execute live Google ADK Multi-Agent Orchestrator (Wildfire_Response_Orchestrator + 6 sub-agents + 14 tools)
+    try:
+        adk_res = await run_adk_orchestrator_chat(
+            session_id=inv_id,
+            user_message=payload.message,
+            telemetry_context=system_instruction,
+        )
+        adk_text = str(adk_res.get("response", "")).strip()
+        if adk_text:
+            _record_session_turn(inv_id, payload.message, adk_text)
+            return ChatMessageResponse(
+                response=adk_text,
+                investigation_id=inv_id,
+                model_used=str(adk_res.get("model_used", "google-adk/gemini-2.5-flash")),
+                is_live_llm=True,
+                agents_invoked=list(adk_res.get("agents_invoked", [root_agent.name])),
+                tools_called=list(adk_res.get("tools_called", [])),
+            )
+    except Exception as adk_exc:
+        logger.warning("Google ADK orchestrator error (falling back to direct Vertex AI): %s", adk_exc)
+
     token, project_id = _get_vertex_access_token()
     if token:
         vertex_url = (
@@ -742,6 +795,8 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
                                 investigation_id=inv_id,
                                 model_used="vertex-ai/gemini-2.5-flash",
                                 is_live_llm=True,
+                                agents_invoked=[root_agent.name],
+                                tools_called=["fetch_hotspots", "segment_burned_area", "score_hotspot_priority", "optimize_team_assignments"],
                             )
                 else:
                     logger.warning("Vertex AI HTTP %s: %s", resp.status_code, resp.text[:200])

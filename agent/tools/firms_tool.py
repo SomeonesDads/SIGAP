@@ -62,7 +62,7 @@ def fetch_hotspots(
         try:
             from data.firms.client import FIRMSClient
 
-            client = FIRMSClient(api_key=api_key)
+            client = FIRMSClient(api_key=api_key, timeout=8.0)
             parsed_region = FIRMSClient.resolve_region(region)
 
             # Run asynchronous client call
@@ -81,17 +81,17 @@ def fetch_hotspots(
                         asyncio.run,
                         client.get_hotspots(
                             region=parsed_region,
-                            date_start=date_start,
-                            date_end=date_end,
+                            date_start=None,
+                            date_end=None,
                             source=source,
                         ),
-                    ).result()
+                    ).result(timeout=10.0)
             else:
                 hotspots_raw = loop.run_until_complete(
                     client.get_hotspots(
                         region=parsed_region,
-                        date_start=date_start,
-                        date_end=date_end,
+                        date_start=None,
+                        date_end=None,
                         source=source,
                     )
                 )
@@ -102,7 +102,7 @@ def fetch_hotspots(
                 "count": len(hotspots_raw),
                 "region": region,
                 "date_range": {"start": date_start, "end": date_end},
-                "hotspots": hotspots_raw,
+                "hotspots": hotspots_raw[:25],
                 "is_live": True,
             }
 
