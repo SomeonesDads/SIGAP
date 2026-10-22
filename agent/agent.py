@@ -66,6 +66,23 @@ load_dotenv()
 logger = logging.getLogger("SIGAP.Agent.Orchestrator")
 
 
+def _ensure_adc_credentials_path() -> None:
+  """Ensure GOOGLE_APPLICATION_CREDENTIALS points to a valid file both on Windows host and inside Linux Docker."""
+  from pathlib import Path
+
+  gac = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+  if gac and os.path.exists(gac):
+    return
+  docker_adc = Path(__file__).resolve().parents[1] / "backend" / "adc_credentials.json"
+  if docker_adc.exists():
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(docker_adc)
+  elif gac and not os.path.exists(gac):
+    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
+
+_ensure_adc_credentials_path()
+
+
 class GlobalGemini(Gemini):
   """Configures the Vertex AI Gemini client with explicit GCP project and ADC/Service Account credentials."""
 
@@ -78,6 +95,7 @@ class GlobalGemini(Gemini):
 
   @cached_property
   def api_client(self) -> Client:
+    _ensure_adc_credentials_path()
     project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() or "hackathon-primestep-04"
     location = os.getenv("VERTEX_ADK_LOCATION", "").strip() or (
         "global" if self.model.startswith("gemini-3") else "us-central1"

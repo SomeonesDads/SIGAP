@@ -63,6 +63,16 @@ class ChatMessageResponse(BaseModel):
 
 def _get_vertex_access_token() -> tuple[str | None, str]:
     """Obtain an OAuth2 Bearer token from Cloud Run Metadata Server, Service Account JSON, or ADC."""
+    from pathlib import Path
+
+    gac = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    if not (gac and os.path.exists(gac)):
+        docker_adc = Path(__file__).resolve().parents[2] / "adc_credentials.json"
+        if docker_adc.exists():
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(docker_adc)
+        elif gac and not os.path.exists(gac):
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
     project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip() or "hackathon-primestep-04"
 
     # 1. Explicit Service Account JSON content passed via environment variable
@@ -720,12 +730,21 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         "telemetri satelit, kondisi cuaca/angin/gambut, valuasi kerugian & emisi kebakaran, serta pengerahan taktis regu pemadam/evakuasi. "
         "Apabila pengguna menyisipkan pertanyaan di luar fokus pemadaman/karhutla (seperti koding umum, kuliner, hiburan, olahraga, politik, kripto, dll.), "
         "tolak bagian tersebut dengan tegas dan fokuskan jawaban hanya pada operasional karhutla.\n"
-        "ATURAN UTAMA MENJAWAB PENGGUNA:\n"
-        "1. JAWAB LANGSUNG PERTANYAAN SPESIFIK PENGGUNA (jangan memberikan template yang tidak nyambung dengan pertanyaan):\n"
-        "   - Jika pengguna bertanya tentang KERUGIAN EKONOMI / DAMPAK JIKA API DIBIARKAN / EMISI / RISIKO, sajikan analisis komprehensif berbasis data Valuasi Kerugian & Proyeksi Perambatan (dalam Rupiah/Miliar, Hektare 24–72 jam, emisi ton CO2e, dampak pariwisata/kesehatan/permukiman), lalu tutup dengan saran tindakan singkat.\n"
-        "   - Jika pengguna meminta RENCANA TAKTIS / PENGERAHAN ARMADA / ALOKASI SUMBER DAYA, gunakan prinsip PERIMETER TACTICAL PLAN: jangan pernah mengarahkan regu darat ke titik tengah api (Core DeepRed) yang terkepung kobaran aktif, melainkan kerahkan ke 4 Sektor Perimeter Luar (POS-1 Upwind Anchor, POS-2 Sayap Kiri, POS-3 Sayap Kanan, POS-4 Sekat Bakar Depan) dan UDP-1 (Khusus Drone/Water Bombing Udara).\n"
-        "   - Jika pengguna bertanya tentang STATUS KEBAKARAN / CUACA / LOKASI, jawab sesuai data telemetri satelit live.\n"
-        "2. Gunakan Bahasa Indonesia yang profesional, tajam, dan terstruktur dengan Markdown.\n"
+        "ATURAN UTAMA MENJAWAB PENGGUNA (BEDAKAN JENIS PERTANYAAN — JANGAN MENJAWAB SEMUA PERTANYAAN DENGAN TEMPLATE RENCANA TAKTIS POS-1..POS-4):\n"
+        "1. ANALISIS TEMPORAL / 7 HARI TERAKHIR (misal: 'Analisis Pulang Pisau 7 hari terakhir', 'Analisis wilayah X'):\n"
+        "   - Fokus pada **Tren Akumulasi Titik Panas 7 Hari Terakhir**, **Rincian 4 Zona Keparahan DINOv3 BurnSeg & dNBR Sentinel-2** (Zona 1 Inti Merah, Zona 2 Api Aktif Oranye, Zona 3 Transisi, Zona 4 Buffer Kuning), **Karakteristik Hidrologi Gambut/Tanah**, serta **Skor Risiko MCDA**.\n"
+        "2. STATUS PERAMBATAN API & VEKTOR ANGIN (misal: 'Apakah sedang ada api merambat di Kalimantan?', 'Ke mana arah rambat api?'):\n"
+        "   - Jawab langsung **YA/TIDAK** beserta jumlah titik panas & klaster aktif di wilayah tersebut.\n"
+        "   - Jelaskan **Dinamika Perambatan Api (Model Eliptis Rothermel)**: kecepatan & arah angin (km/j & kompas), laju perluasan 24 jam, indeks flamabilitas bahan bakar, daftar klaster yang sedang merambat aktif, dan ancaman arah asap/api ke permukiman.\n"
+        "3. ANALISIS LAHAN GAMBUT / BAWAH PERMUKAAN (misal: 'Area gambut klaster aktif'):\n"
+        "   - Fokus pada klaster di atas Kesatuan Hidrologis Gambut (KHG), kedalaman gambut, sifat bara bawah permukaan (smoldering fire), kebutuhan sekat kanal & suntik gambut (Peat Spear), serta emisi karbon.\n"
+        "4. PRIORITAS DEKAT PERMUKIMAN & EVAKUASI (misal: 'Prioritas dekat permukiman'):\n"
+        "   - Urutkan klaster berdasarkan jarak terdekat ke permukiman warga (`settlement_distance_km`), indeks dorongan angin ke arah warga (`downwind_alignment`), risiko ISPA, dan proteksi sekat bakar depan.\n"
+        "5. VALUASI KERUGIAN EKONOMI & DAMPAK JIKA DIBIARKAN (misal: 'Berapa kerugian jika dibiarkan?'):\n"
+        "   - Sajikan analisis komprehensif berbasis data Valuasi Kerugian & Proyeksi Perambatan (Rp Miliar 24–72 jam, Hektare, emisi ton CO2e).\n"
+        "6. RENCANA TAKTIS ALOKASI PERIMETER & RUTE ARMADA (HANYA jika pengguna meminta rencana taktis / pengerahan regu / alokasi sumber daya / pemadaman):\n"
+        "   - Gunakan prinsip PERIMETER TACTICAL PLAN: jangan mengarahkan regu darat ke titik tengah api (Core DeepRed), melainkan kerahkan ke BASE, POS-1 (Upwind Anchor), POS-2 (Sayap Kiri), POS-3 (Sayap Kanan), POS-4 (Sekat Bakar Depan), dan UDP-1 (Khusus Drone/Water Bombing).\n"
+        "Gunakan Bahasa Indonesia yang profesional, tajam, dan terstruktur dengan Markdown.\n"
         "DATA TELEMETRI SATELIT LIVE & VALUASI:\n"
         f"- Lokasi Fokus: {top_loc} ({top_dist}) di wilayah {target_region} ({total_raw} titik panas lintas-satelit VIIRS S-NPP & NOAA-20 NRT, {cluster_count} klaster, kepercayaan sensor {top_sensor_conf}%)\n"
         f"- Vektor Angin & Bahan Bakar: Kecepatan angin {top_wind_kmh} km/j menuju {top_wind_label} (indeks dorongan ke permukiman: {top_downwind:+.2f}), flamabilitas {top_flam_pct}% ({top_soil})\n"
@@ -803,15 +822,35 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         except Exception as exc:
             logger.warning("Vertex AI call error: %s", exc)
 
-    # Intent-aware deterministic fallback synthesis tailored to the user's question and queried location
+    # Intent-aware deterministic fallback synthesis tailored to the user's specific question and queried location
     q_lower = payload.message.lower()
+    is_tactical_query = any(
+        kw in q_lower
+        for kw in ("rencana taktis", "alokasi", "pos-1", "pos-2", "udp-1", "rute armada", "kerahkan", "memadamkan", "pengerahan")
+    )
     is_loss_query = any(
         kw in q_lower
-        for kw in ("kerugian", "rugi", "biaya", "dampak", "dibiarkan", "biarkan", "ekonomi", "emisi", "karbon", "bahaya")
+        for kw in ("kerugian", "rugi", "biaya", "dampak", "dibiarkan", "biarkan", "ekonomi", "emisi", "karbon")
+    )
+    is_7day_analysis_query = (
+        any(kw in q_lower for kw in ("7 hari", "tujuh hari", "seminggu", "terakhir", "tren", "riwayat", "histori", "evaluasi"))
+        or ("analisis" in q_lower and not is_tactical_query and not is_loss_query)
+    )
+    is_spread_query = any(
+        kw in q_lower
+        for kw in ("merambat", "menyebar", "menjalar", "sedang ada api", "apakah ada api", "arah angin", "rambat", "meluas")
+    )
+    is_peat_query = any(
+        kw in q_lower
+        for kw in ("area gambut", "lahan gambut", "kubah gambut", "gambut klaster", "gambut aktif", "bawah permukaan")
+    )
+    is_settlement_query = any(
+        kw in q_lower
+        for kw in ("dekat permukiman", "dekat pemukiman", "prioritas dekat", "ancam warga", "desa terdekat", "evakuasi")
     )
     is_ranking_query = any(
         kw in q_lower
-        for kw in ("paling banyak", "terbanyak", "terbesar", "tertinggi", "terparah", "5 provinsi", "lima provinsi", "provinsi mana", "daerah mana", "wilayah mana", "daftar", "top", "urutan", "ranking", "berapa")
+        for kw in ("paling banyak", "terbanyak", "terbesar", "tertinggi", "terparah", "5 provinsi", "lima provinsi", "provinsi mana", "daerah mana", "wilayah mana", "daftar", "top", "urutan", "ranking")
     )
     loc_header = (
         f"{top_loc} ({top_dist})"
@@ -819,7 +858,74 @@ async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
         else f"{top_loc}, {target_region}"
     )
 
-    if is_ranking_query:
+    if is_7day_analysis_query:
+        dnbr_val = float(top.get("dnbrMean", 0.64))
+        fallback_reply = (
+            f"### 📊 Analisis Multi-Sensor 7 Hari Terakhir — {loc_header} ({live_badge})\n\n"
+            f"Berdasarkan fusi data deret waktu **7 hari terakhir** dari sensor **VIIRS S-NPP & NOAA-20 (NASA FIRMS)** serta citra optik **Sentinel-2 L2A (`{stac_scene_id}`, tutupan awan {stac_cloud}%)**, berikut adalah hasil evaluasi komprehensif di **{target_region}**:\n\n"
+            f"* **1. Tren Aktivitas Termal (7 Hari Terakhir):**\n"
+            f"  * Terdeteksi akumulasi **{total_raw} titik panas aktif** yang membentuk **{cluster_count} klaster spasial DBSCAN** (kepercayaan lintas-satelit **{top_sensor_conf}%**).\n"
+            f"  * Episentrum utama berada di **{top_loc}** (`{c_lat:.4f}°, {c_lon:.4f}°`) dengan energi radiasi puncak **FRP {top_frp} MW** dan skor risiko MCDA **{top_score}/100**.\n"
+            f"* **2. Rincian 4 Zona Keparahan Luka Bakar (DINOv3 BurnSeg & dNBR {dnbr_val:.2f}):**\n"
+            f"  * **Zona 1 — Inti Merah Tua (High Severity dNBR > 0.66):** **{red_ha} Ha** (pusat bara aktif & degradasi kanopi penuh).\n"
+            f"  * **Zona 2 — Merah-Oranye (Moderate-High Severity):** **{orange_ha} Ha** (front kobaran api aktif dengan flamabilitas **{top_flam_pct}%**).\n"
+            f"  * **Zona 3 & 4 — Kuning-Oranye (Transisi & Sebaran Asap):** **{yellow_ha} Ha** (total cakupan terdampak saat ini **{total_ha} Ha**).\n"
+            f"* **3. Kondisi Hidrologi Lahan & Risiko 24 Jam ke Depan:**\n"
+            f"  * **Karakteristik Tanah:** **{top_soil}** — {'rawan perambatan bara bawah permukaan (smoldering peat fire) yang sulit padam secara alami' if top_peat else 'vegetasi kering yang memicu rambatan permukaan cepat'}.\n"
+            f"  * **Proyeksi Tanpa Intervensi:** Dengan dorongan angin **{top_wind_kmh} km/j** ke arah **{top_wind_label}**, area terbakar berisiko meluas menjadi **~{projected_24h_ha} Ha** dalam 24 jam (potensi kerugian **Rp {loss_24h_miliar:.2f} Miliar** & emisi **{co2_24h_ton:,} ton CO₂e**)."
+        )
+    elif is_spread_query:
+        ros_m_per_min = round((top_wind_kmh * 0.42) * (float(top_flam_pct) / 70.0), 1)
+        cluster_bullets = "\n".join(
+            f"  * **{h.get('location')} ({h.get('district', target_region)})** — `{h.get('lat'):.4f}°, {h.get('lon'):.4f}°`: **{h.get('hotspotCount', 1)} titik panas** (FRP **{h.get('totalFrp', 25)} MW**), merambat ke arah **{h.get('windDirectionLabel', top_wind_label)}** dengan kecepatan angin **{h.get('windSpeedKmh', top_wind_kmh)} km/j** (Jarak permukiman: **{h.get('settlementKm', 2.0)} km**)."
+            for h in hotspots[:4]
+        )
+        fallback_reply = (
+            f"### 🌬️ Status Perambatan Api Aktif & Analisis Vektor Angin — {target_region} ({live_badge})\n\n"
+            f"**YA — Saat ini terdeteksi api aktif yang sedang merambat di {target_region}.** Pemindaian satelit real-time menangkap **{total_raw} titik panas aktif** dalam **{cluster_count} klaster kebakaran** dengan dinamika perambatan sebagai berikut:\n\n"
+            f"* **1. Vektor & Kecepatan Perambatan Kepala Api (Rothermel Surface Spread):**\n"
+            f"  * **Fokus Perambatan Tercepat:** **{top_loc} ({top_dist})** pada koordinat `{c_lat:.4f}°, {c_lon:.4f}°` (Luas saat ini **{total_ha} Ha**, FRP **{top_frp} MW**).\n"
+            f"  * **Dorongan Angin Dominan:** Kecepatan **{top_wind_kmh} km/j** mendorong kepala api dan kepulan asap ke arah **{top_wind_label}** (indeks kesejajaran ke permukiman: **{top_downwind:+.2f}**).\n"
+            f"  * **Estimasi Laju Rambat (Rate of Spread):** **~{ros_m_per_min} meter/menit** pada bahan bakar **{top_soil}** (indeks flamabilitas **{top_flam_pct}%**), berpotensi memperluas area terbakar dari **{total_ha} Ha** menjadi **~{projected_24h_ha} Ha** dalam 24 jam.\n"
+            f"* **2. Daftar Klaster Api yang Sedang Merambat di {target_region}:**\n"
+            f"{cluster_bullets}\n"
+            f"* **3. Titik Cegatan Prioritas (Downwind Cutline):**\n"
+            f"  * Permukiman terdekat berada pada jarak **{top_settlement_km} km** searah rambatan angin. Sekat bakar depan wajib segera dibuka di **POS-4 (`{pos4_lat:.4f}°, {pos4_lon:.4f}°`)** untuk memutus kepala api."
+        )
+    elif is_peat_query:
+        peat_clusters = [h for h in hotspots if h.get("peatland") or "gambut" in str(h.get("soil", "")).lower()] or hotspots[:3]
+        peat_lines = "\n".join(
+            f"  * **{h.get('location')} ({h.get('district', target_region)})** — Tanah: **{h.get('soil')}** • Luas: **~{h.get('areaHa')} Ha** (FRP **{h.get('totalFrp')} MW**, Skor MCDA **{h.get('riskScore')}/100**)"
+            for h in peat_clusters[:4]
+        )
+        fallback_reply = (
+            f"### 🌲 Analisis Klaster Aktif Lahan Gambut (KHG) — {target_region} ({live_badge})\n\n"
+            f"Pemindaian tumpang-susun (**Spatial Overlay**) antara titik panas **NASA FIRMS** dan peta **Kesatuan Hidrologis Gambut (KHG KLHK)** mengidentifikasi aktivitas kebakaran gambut kritis di **{loc_header}**:\n\n"
+            f"* **1. Klaster Aktif di Atas Lahan Gambut:**\n"
+            f"{peat_lines}\n"
+            f"* **2. Karakteristik Bahaya Bara Bawah Permukaan (Sub-surface Smoldering):**\n"
+            f"  * Pada **{top_soil}** (flamabilitas **{top_flam_pct}%**), api merambat di bawah permukaan tanah melalui lapisan serasah organik kering sehingga tidak cukup dipadamkan dengan siraman permukaan biasa.\n"
+            f"  * Menghasilkan emisi karbon sangat tinggi (**~{co2_24h_ton:,} ton CO₂e / 24 jam**) dan asap pekat jarak dekat.\n"
+            f"* **3. Rekomendasi Intervensi Khusus Gambut:**\n"
+            f"  * Kerahkan **Tim Pembasahan Gambut & 6 Unit Suntik Gambut (Peat Spear)** di sektor **POS-3 (`{pos3_lat:.4f}°, {pos3_lon:.4f}°`)** serta aktifkan penyekatan kanal (**Canal Blocking**) untuk menaikkan tinggi muka air tanah."
+        )
+    elif is_settlement_query:
+        sorted_by_stl = sorted(hotspots, key=lambda x: float(x.get("settlementKm", 99.0)))[:4]
+        stl_lines = "\n".join(
+            f"  {i+1}. **{h.get('location')} ({h.get('district', target_region)})** — Jarak ke permukiman: **{h.get('settlementKm')} km** • Arah angin: **{h.get('windDirectionLabel', top_wind_label)} ({h.get('windSpeedKmh', top_wind_kmh)} km/j)** • Skor MCDA: **{h.get('riskScore')}/100**"
+            for i, h in enumerate(sorted_by_stl)
+        )
+        fallback_reply = (
+            f"### 🏘️ Prioritas Klaster Dekat Permukiman & Proteksi Warga — {target_region} ({live_badge})\n\n"
+            f"Berdasarkan analisis buffer jarak permukiman **OpenStreetMap (OSM)** dan arah dorongan angin (**Downwind Smoke & Fire Alignment**), berikut adalah klaster yang paling mengancam kawasan warga di **{target_region}**:\n\n"
+            f"* **1. Urutan Klaster Terdekat ke Permukiman Warga:**\n"
+            f"{stl_lines}\n"
+            f"* **2. Evaluasi Risiko Paparan Asap & Penjalaran Api ({top_loc}):**\n"
+            f"  * Episentrum `{c_lat:.4f}°, {c_lon:.4f}°` berjarak **{top_settlement_km} km** dari permukiman dengan angin **{top_wind_kmh} km/j** menuju **{top_wind_label}**.\n"
+            f"* **3. Tindakan Proteksi Segera:**\n"
+            f"  * Tempatkan **Unit Damkar Struktural, BPBD & Alat Berat Sekat Bakar** di garis pertahanan depan **POS-4 (`{pos4_lat:.4f}°, {pos4_lon:.4f}°`)** serta siagakan pos medis ISPA bagi warga terdampak asap."
+        )
+    elif is_ranking_query:
         ranking_lines: list[str] = []
         for idx, h in enumerate(hotspots[:5], start=1):
             h_loc = h.get("location", "Wilayah Pantauan")
