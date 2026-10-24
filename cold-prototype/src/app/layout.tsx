@@ -1,19 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Rajdhani } from "next/font/google";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-jetbrains-mono",
-});
-const rajdhani = Rajdhani({
-  subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-rajdhani",
-});
 
 export const metadata: Metadata = {
   title: "SIGAP — Sistem Pemantauan Karhutla",
@@ -27,10 +14,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="id"
-      className={`${inter.variable} ${jetbrainsMono.variable} ${rajdhani.variable}`}
-    >
+    <html lang="id">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Rajdhani:wght@600;700&display=swap"
+        />
+      </head>
       <body className="min-h-screen bg-sigap-app text-slate-900 antialiased selection:bg-sigap-amber/30">
         {children}
       </body>

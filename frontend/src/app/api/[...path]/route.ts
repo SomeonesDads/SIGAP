@@ -17,7 +17,12 @@ async function proxyRequest(
   const { path } = await context.params;
   const joinedPath = (path || []).join("/");
   const search = req.nextUrl.search || "";
-  const targetUrl = `${getBackendBaseUrl()}/api/${joinedPath}${search}`;
+  const needsSlash =
+    joinedPath === "chat" ||
+    joinedPath === "investigations" ||
+    joinedPath === "hotspots" ||
+    joinedPath === "reports";
+  const targetUrl = `${getBackendBaseUrl()}/api/${joinedPath}${needsSlash ? "/" : ""}${search}`;
 
   try {
     const headers = new Headers();

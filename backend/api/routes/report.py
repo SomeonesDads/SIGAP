@@ -124,6 +124,7 @@ async def _resolve_cluster_for_report(
     return hotspots[0], is_live
 
 
+@router.get("", response_model=dict[str, Any], include_in_schema=False)
 @router.get("/", response_model=dict[str, Any])
 async def list_reports(
     region: str = Query("Indonesia", description="Operational region"),

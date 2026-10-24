@@ -39,6 +39,7 @@ import {
   SAMPLE_HOTSPOTS,
   createDrones,
   rankHotspots,
+  rawPointToHotspot,
   stepSimulation,
   type Drone,
   type Hotspot,
@@ -170,7 +171,6 @@ export function MonitorDashboard({
   const [activeLayerIds, setActiveLayerIds] = useState<Set<string>>(
     () => new Set(["hotspots", "segmentation", "dnbr", "peatland", "settlement"])
   );
-  const [autoPopupsOnZoom, setAutoPopupsOnZoom] = useState(true);
 
   // Mobile responsive view & collapsible overlays
   const [mobileView, setMobileView] = useState<MobileWorkspaceView>("split");
@@ -389,10 +389,40 @@ export function MonitorDashboard({
       setMobileView((v) => (v === "map" ? "split" : v));
       focusHotspot(hotspot, 11);
       sendMessage(
-        `Saya beroperasi di ${hotspot.location} (${hotspot.district ?? "Indonesia"}). Berikan rencana alokasi sumber daya taktis di sekeliling perimeter luar (POS-1 s/d POS-4 & UDP-1) untuk memadamkan klaster ${hotspot.id} tanpa memasuki pusat api.`
+        `Saya beroperasi di ${hotspot.location} (${hotspot.district ?? "Indonesia"}). Berikan rencana alokasi sumber daya taktis di sekeliling perimeter luar (POS-1 s/d POS-4 & UDP-1) untuk memadamkan klaster ${hotspot.id} tanpa memasuki pusat api.`,
+        hotspot
       );
     },
     [focusHotspot, sendMessage]
+  );
+
+  // A cluster ID typed in chat (e.g. "HS-0421", "HS-RAW-...") pins the investigation to that exact hotspot
+  const handleChatSend = useCallback(
+    (content: string) => {
+      const ids = (content.match(/\bHS-[A-Z0-9-]+\b/gi) ?? []).map((id) => id.toUpperCase());
+      if (ids.length === 0) {
+        sendMessage(content);
+        return;
+      }
+      const known = [
+        ...hotspots,
+        ...(selectedCustomHotspot ? [selectedCustomHotspot] : []),
+        ...(activeCluster ? [activeCluster] : []),
+      ];
+      let target = known.find((h) => ids.includes(h.id.toUpperCase()));
+      if (!target) {
+        const rawIdx = rawHotspots.findIndex((pt, idx) =>
+          ids.includes(rawPointToHotspot(pt, idx, hotspots).id.toUpperCase())
+        );
+        if (rawIdx >= 0) target = rawPointToHotspot(rawHotspots[rawIdx], rawIdx, hotspots);
+      }
+      if (target) {
+        setMobileView((v) => (v === "map" ? "split" : v));
+        focusHotspot(target, 11);
+      }
+      sendMessage(content, target);
+    },
+    [hotspots, selectedCustomHotspot, activeCluster, rawHotspots, focusHotspot, sendMessage]
   );
 
   const onMapSelect = useCallback(
@@ -817,7 +847,7 @@ export function MonitorDashboard({
                 rawHotspots={rawHotspots}
                 segmentation={segmentation}
                 spatialContext={spatialContext}
-                autoPopupsOnZoom={autoPopupsOnZoom}
+                autoPopupsOnZoom={false}
               />
             </div>
 
@@ -882,25 +912,6 @@ export function MonitorDashboard({
                       </button>
                     );
                   })}
-                  <button
-                    type="button"
-                    onClick={() => setAutoPopupsOnZoom((v) => !v)}
-                    title="Tampilkan otomatis semua popup zona DINOv3 & sektor taktis saat zoom-in (tanpa perlu klik satu per satu)"
-                    className={cn(
-                      "flex cursor-pointer items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-semibold transition-all",
-                      autoPopupsOnZoom
-                        ? "border-indigo-500/40 bg-indigo-500/15 text-indigo-900"
-                        : "border-slate-200 bg-slate-50 text-slate-400 opacity-60 hover:opacity-90"
-                    )}
-                  >
-                    <Sparkles className="size-3 text-indigo-600" />
-                    <span>Auto-Popup Zona</span>
-                    {autoPopupsOnZoom ? (
-                      <Eye className="size-2.5 opacity-75" />
-                    ) : (
-                      <EyeOff className="size-2.5 opacity-50" />
-                    )}
-                  </button>
                 </div>
               </div>
             </div>
@@ -1505,7 +1516,7 @@ export function MonitorDashboard({
 
           {/* Compact Chat Input Bar */}
           <div className="shrink-0 border-t border-slate-200 bg-white p-2">
-            <ChatInput onSend={sendMessage} isLoading={isLoading} />
+            <ChatInput onSend={handleChatSend} isLoading={isLoading} />
           </div>
         </aside>
       </div>

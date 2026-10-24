@@ -18,6 +18,9 @@
 :root {
   --background: #f1f5f9;
   --foreground: #0f172a;
+  --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-jetbrains-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-rajdhani: "Rajdhani", "Inter", sans-serif;
 }
 
 body {

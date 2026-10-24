@@ -427,6 +427,7 @@ def _record_session_turn(session_id: str, user_message: str, model_reply: str) -
             ctx["history"] = hist[-6:]
 
 
+@router.post("", response_model=ChatMessageResponse, include_in_schema=False)
 @router.post("/", response_model=ChatMessageResponse)
 async def send_chat_message(payload: ChatMessageRequest) -> ChatMessageResponse:
     """Execute live multi-agent tools and synthesize response using Vertex AI Gemini 2.5 Flash via ADC."""

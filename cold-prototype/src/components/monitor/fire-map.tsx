@@ -270,7 +270,7 @@ export default function FireMap({
   rawHotspots = [],
   segmentation = null,
   spatialContext = null,
-  autoPopupsOnZoom = true,
+  autoPopupsOnZoom = false,
 }: FireMapProps) {
   const [mapZoom, setMapZoom] = useState(5);
   const [mapCenter, setMapCenter] = useState<[number, number]>([-2.2, 118.0]);

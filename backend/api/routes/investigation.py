@@ -22,6 +22,7 @@ router = APIRouter(prefix="/investigations", tags=["Investigations"])
 service = InvestigationService()
 
 
+@router.post("", response_model=InvestigationResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=InvestigationResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/start", response_model=InvestigationResponse, status_code=status.HTTP_201_CREATED)
 async def create_investigation(payload: InvestigationCreate) -> InvestigationResponse:
@@ -29,6 +30,7 @@ async def create_investigation(payload: InvestigationCreate) -> InvestigationRes
     return service.create(payload)
 
 
+@router.get("", response_model=list[InvestigationResponse], include_in_schema=False)
 @router.get("/", response_model=list[InvestigationResponse])
 async def list_investigations() -> list[InvestigationResponse]:
     """List all active and historical wildfire investigations."""

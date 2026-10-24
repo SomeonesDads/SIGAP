@@ -804,6 +804,7 @@ def _to_hotspot_model(h: dict[str, Any]) -> Hotspot:
     )
 
 
+@router.get("", response_model=list[Hotspot], include_in_schema=False)
 @router.get("/", response_model=list[Hotspot])
 async def get_hotspots(
     region: str = Query("Indonesia", description="Target region or province name"),

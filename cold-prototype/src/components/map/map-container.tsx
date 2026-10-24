@@ -242,48 +242,6 @@ export function MapContainer({
             dnbrClone.bindPopup(poly.getPopup()!);
             dnbrClone.addTo(groups.dnbr);
           }
-
-          // When zoomed in (mapZoom >= 8), automatically show all 4 zone output popups for the focused cluster
-          const isPrimaryCluster = selectedRawHotspot ? c.id === selectedRawHotspot.id : idx === 0;
-          if (mapZoom >= 8 && isPrimaryCluster) {
-            const baseAreaHa = Math.max(12, c.areaHa ?? 120);
-            const isPeat = Boolean(c.peatland) || (c.soil ?? "").toLowerCase().includes("gambut");
-            const projected24hHa = Math.round(baseAreaHa * (isPeat ? 1.85 : 2.15));
-            const totalLoss24hMiliar = ((projected24hHa * (isPeat ? 59.5 : 31.5)) / 1000).toFixed(2);
-            const vIdx =
-              ring.tier === "CORE_DEEPRED"
-                ? 15
-                : ring.tier === "INNER_ORANGE"
-                ? 9
-                : ring.tier === "MID_AMBER"
-                ? 21
-                : 3;
-            const pos = ring.positions[vIdx] ?? ring.positions[0];
-            const tierTag =
-              ring.tier === "CORE_DEEPRED"
-                ? "ZONA 1 • INTI"
-                : ring.tier === "INNER_ORANGE"
-                ? "ZONA 2 • AKTIF"
-                : ring.tier === "MID_AMBER"
-                ? "ZONA 3 • TRANSISI"
-                : "ZONA 4 • BUFFER 24J";
-            const summaryLine =
-              ring.tier === "CORE_DEEPRED"
-                ? `Inti: ${(baseAreaHa * 0.24).toFixed(1)} Ha • Drop Udara UDP-1`
-                : ring.tier === "INNER_ORANGE"
-                ? `Aktif: ${(baseAreaHa * 0.31).toFixed(1)} Ha • Sayap POS-2/3`
-                : ring.tier === "MID_AMBER"
-                ? `Angin ${ring.windSpeedKmh} km/j → ${ring.windDirectionLabel}`
-                : `Proyeksi 24j: ${projected24hHa} Ha • Rp ${totalLoss24hMiliar} M`;
-
-            const calloutIcon = L.divIcon({
-              className: "sigap-zone-auto-popup",
-              iconSize: [188, 1],
-              iconAnchor: [94, 12],
-              html: `<div style="width:188px;background:rgba(15,23,42,0.92);border:1.5px solid ${ring.strokeColor};border-radius:7px;padding:4px 6px;color:#f8fafc;font:500 9.5px system-ui,sans-serif;box-shadow:0 3px 10px rgba(0,0,0,0.35)"><div style="font-weight:700;color:#fde047;font-size:9px">${badge} ${tierTag} (${ring.radiusKm} km)</div><div>${summaryLine}</div></div>`,
-            });
-            L.marker(pos, { icon: calloutIcon, zIndexOffset: 1200 }).addTo(groups.segmentation);
-          }
         });
       });
 
